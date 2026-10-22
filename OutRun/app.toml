@@ -1,0 +1,20 @@
+[app]
+id = "aster.outrun"
+name = "OutRun"
+description = "载着你，驶向海风与落日。"
+version = "0.3.1"
+abi = "4.1.0"
+abi_min = "4.1"
+icon = "assets/icon.bin"
+
+aot = true
+orientation = "landscape"
+category = "game"
+initial_memory = 3145728
+max_memory = 4194304
+heap = 2621440
+stack = 32768
+sources = ["src/main.c", "src/port/assets.c", "src/port/render.c", "src/port/game.c", "src/port/audio.c"]
+requires = ["display", "touch", "filesystem", "audio-out", "audio-effects"]
+permissions = ["fs"]
+

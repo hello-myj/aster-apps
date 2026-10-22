@@ -1,0 +1,21 @@
+[app]
+id = "aster.touchtest"
+name = "多指触控测试"
+description = "指尖落下，各有光芒。实时查看多指、坐标与轨迹。"
+version = "1.0.0"
+abi = "4.1.0"
+abi_min = "4.1"
+aot = true
+optimize = "Os"
+orientation = "landscape"
+category = "tool"
+stack = 16384
+initial_memory = 786432
+max_memory = 1048576
+heap = 524288
+requires = ["display", "touch"]
+permissions = []
+sources = ["src/main.c"]
+
+[sdk]
+target = "xtensa"

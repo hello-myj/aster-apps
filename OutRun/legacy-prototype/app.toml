@@ -1,0 +1,21 @@
+[app]
+id = "aster.outrun"
+name = "OutRun"
+description = "OutRun Aster driving prototype"
+version = "0.1.0"
+abi = "4.0.0"
+abi_min = "4.0"
+aot = true
+orientation = "landscape"
+category = "game"
+initial_memory = 1048576
+max_memory = 2097152
+heap = 524288
+stack = 16384
+sources = ["src/main.c"]
+assets = ["resources/player.png", "resources/traffic.png", "resources/palm.png", "resources/control-steer.png", "resources/control-brake.png", "resources/track.bin"]
+requires = ["display", "touch", "filesystem"]
+permissions = ["fs"]
+
+
+

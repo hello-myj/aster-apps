@@ -1,0 +1,28 @@
+# Generated app builds, simulator data and diagnostic output
+**/build/
+**/dist/
+**/artifacts/
+**/sdcard/
+**/node_modules/
+**/__pycache__/
+*.py[cod]
+*.ast
+*.wasm
+*.aot
+*.o
+*.obj
+*.tmp
+*.log
+
+# Local machine settings and secrets
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
