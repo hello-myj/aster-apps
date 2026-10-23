@@ -29,3 +29,7 @@
 已完成 AOT 构建和 SDK 包校验，包大小 50,912 字节；已在微雪 waveshare35b、ABI 4.1.0 固件安装并启动，状态 RUNNING (err=0)。初始化确认实际画布 480×320，设备 reported_max=2。部署记录见 artifacts/deploy.log。真实双指交叉、连续移动、独立抬起效果待用户操作确认。
 
 部署时固件多次报告 repeated invalid AXS15231B touch frames (-22)，发生在 APP 启动之前。如果存在不响应或漏点，请同时排查触摸驱动/屏模组；本 APP 只显示固件交付的事件。
+
+## 开源许可证
+
+GPL-3.0-or-later，完整文本见 [LICENSE](LICENSE)；仓库许可范围见 [第三方声明](../THIRD_PARTY_NOTICES.md)。

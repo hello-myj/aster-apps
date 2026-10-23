@@ -31,3 +31,11 @@ aster/
 ## 第三方来源
 
 OutRun 原版源码和素材完整存放于 `OutRun/vendor/upstream`，按普通文件纳入本仓库，不使用子模块。上游为 ZgzInfinity/OutRun，基准提交 `6882721c99bc79365f815f68d389bf5078129e68`，许可证及原始说明保留在该目录。各项目和第三方内容按各自许可证使用。
+
+## 开源许可证
+
+本仓库自行编写的应用代码、移植代码、工具及文档，除另有声明外，采用 **GNU GPL v3.0 或更新版本（GPL-3.0-or-later）**，完整文本见 [LICENSE](LICENSE)。
+
+该许可证允许使用、修改、商用和再分发；对外分发受 GPL 约束的程序或修改版时，需要按其条款提供对应源代码并保留版权及许可声明。
+
+第三方代码与素材保留原许可证：Pixel Wheels 游戏代码为 GPL-3.0-or-later，部分工具代码为 Apache-2.0，图像和音频素材为 CC BY-SA 4.0；OutRun 继续遵循上游及各文件的许可声明。仓库根许可证不替换这些第三方条款。详细来源、署名和范围见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

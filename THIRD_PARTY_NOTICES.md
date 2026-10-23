@@ -1,0 +1,51 @@
+# License scope and third-party notices
+
+Copyright (C) 2026 hello-myj and contributors.
+
+Unless a file or component states otherwise, the original application code,
+porting code, tools and documentation authored for this repository are licensed
+under the GNU General Public License, version 3 or (at your option) any later
+version (SPDX-License-Identifier: GPL-3.0-or-later). See LICENSE for the complete
+license text.
+
+This default does not replace any third-party copyright, license, attribution,
+trademark or asset notice. Third-party components retain their original terms;
+file-level notices take precedence for those files. Generated resources retain
+the terms applicable to their source material. Inclusion in this repository does
+not grant ownership of third-party names, characters, logos or other marks.
+
+## OutRun
+
+- Upstream: https://github.com/ZgzInfinity/OutRun
+- Revision: 6882721c99bc79365f815f68d389bf5078129e68
+- Upstream distribution includes GNU GPL version 3 in
+  OutRun/vendor/upstream/LICENSE; preserve the upstream copyright and other
+  notices, including those applicable to artwork and audio.
+- Aster port code: GPL-3.0-or-later, as marked in its source files.
+- Source and resource provenance: OutRun/vendor/UPSTREAM.md and the upstream
+  README. This repository does not independently relicense upstream assets.
+
+## Pixel Wheels
+
+- Upstream: https://github.com/agateau/pixelwheels
+- Revision: 0ed0376a6b1e4ba0f055b788fb84cb08d20cf8ea
+- Author: Aurélien Gâteau and contributors.
+- Original game code and Aster port: GPL-3.0-or-later.
+- Original utility code: Apache-2.0, as identified by the upstream notices.
+- Original and converted artwork/audio: CC-BY-SA-4.0, subject to any applicable
+  file-specific notices supplied upstream.
+- License texts: PixelWheels/vendor/upstream/LICENSE.*.
+- Source and resource provenance: PixelWheels/vendor/UPSTREAM.md.
+
+## TouchTest
+
+The original Aster multitouch diagnostic application and its tools are licensed
+under GPL-3.0-or-later. See TouchTest/LICENSE and the repository LICENSE.
+
+## Other notices
+
+Keep the third-party license files and individual source notices when copying
+or redistributing these components. For dependencies, fonts and other files with
+separate notices inside vendor directories, those supplied notices remain
+applicable. The shared Aster SDK is installed separately and is not relicensed by
+this repository.
