@@ -1,0 +1,23 @@
+[app]
+id = "aster.pixelwheels"
+name = "Pixel Wheels"
+description = "小小车轮，驶过田野与城市。"
+version = "0.1.6"
+icon = "assets/icon.bin"
+abi = "4.1.0"
+abi_min = "4.1"
+aot = true
+optimize = "Os"
+orientation = "landscape"
+category = "game"
+initial_memory = 3145728
+max_memory = 4194304
+heap = 2621440
+stack = 32768
+sources = ["src/main.c", "src/audio.c"]
+requires = ["display", "touch", "filesystem", "audio-out", "audio-effects"]
+
+permissions = ["fs"]
+
+[sdk]
+target = "xtensa"

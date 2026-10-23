@@ -7,6 +7,8 @@ Aster 应用项目集合：一个应用对应一个独立文件夹，项目代�
 - [OutRun](OutRun/README.md)：OutRun 重制版移植，微雪 480×320 横屏、虚拟按键、地图选择、连续引擎音，ABI 4.1 / Xtensa AOT。
 - [TouchTest](TouchTest/README.md)：多指触控测试，显示触点编号、彩色轨迹、坐标、双指距离与事件统计，ABI 4.1 / Xtensa AOT。
 
+- [PixelWheels](PixelWheels/README.md)：Pixel Wheels 俯视赛车移植版 0.1.6，原版 9 赛道与 15 车型，480×320 横屏、连续引擎与比赛音效，ABI 4.1 / Xtensa AOT，支持模拟器与微雪实机。
+
 ## 目录约定
 
 ```text
