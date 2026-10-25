@@ -49,3 +49,13 @@ or redistributing these components. For dependencies, fonts and other files with
 separate notices inside vendor directories, those supplied notices remain
 applicable. The shared Aster SDK is installed separately and is not relicensed by
 this repository.
+
+## OpenOMF
+
+OpenOMF upstream source is MIT; its icon is CC-BY-4.0. Original One Must Fall2097
+game data retains its original terms and is fetched separately, not licensed by
+this repository. Aster adapters and tools are GPL-3.0-or-later. See
+OpenOMF/vendor/UPSTREAM.md and retained upstream license files for provenance.
+The original-engine build also statically links wasi-libc and LLVM compiler
+builtins, and uses declaration-only SDL2/ENet headers; preserve their applicable
+component notices when distributing a build.

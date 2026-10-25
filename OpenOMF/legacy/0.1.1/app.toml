@@ -1,0 +1,21 @@
+[app]
+id = "aster.openomf"
+name = "OpenOMF"
+description = "钢铁交锋，重返旧日擂台。"
+version = "0.1.1"
+icon = "assets/icon.bin"
+abi = "4.1.0"
+abi_min = "4.1"
+aot = true
+optimize = "Os"
+orientation = "landscape"
+category = "game"
+initial_memory = 3145728
+max_memory = 4194304
+heap = 524288
+stack = 32768
+sources = ["src/main.c"]
+requires = ["display", "touch", "filesystem", "audio-out", "audio-effects"]
+permissions = ["fs"]
+[sdk]
+target = "xtensa"
