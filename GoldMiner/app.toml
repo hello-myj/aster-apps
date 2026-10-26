@@ -1,0 +1,27 @@
+[app]
+id = "aster.goldminer"
+name = "黄金矿工"
+description = "摇钩拾金，重温旧日午后的闪光。"
+version = "0.1.1"
+abi = "4.2.0"
+abi_min = "4.1"
+aot = true
+optimize = "Os"
+orientation = "landscape"
+category = "game"
+initial_memory = 1310720
+max_memory = 1310720
+heap = 393216
+stack = 32768
+sources = ["port/platform.c", "port/game.c", "port/allocator.c", "port/wasi_adapter.c"]
+requires = ["display", "touch", "filesystem", "audio-out", "audio-effects"]
+permissions = ["fs"]
+icon = "assets/icon.bin"
+assets = ["assets/game.gma", "assets/audio/explosive.wav", "assets/audio/grab_back.wav", "assets/audio/grab_start.wav", "assets/audio/high_value.wav", "assets/audio/hook_reset.wav", "assets/audio/low_value.wav", "assets/audio/money.wav", "assets/audio/normal_value.wav", "assets/audio/goal.mp3", "assets/audio/made_goal.mp3"]
+[sdk]
+target = "xtensa"
+[build]
+includes = ["port"]
+defines = ["OMF_HEAP_BYTES=655360", "__wasi__=1"]
+cflags = ["-flto", "-mbulk-memory", "-isystem", "artifacts/deps/wasi/include/wasm32-wasi", "-include", "port/native_compat.h", "-Wno-unused-parameter"]
+ldflags = ["-flto", "-mbulk-memory", "artifacts/deps/libasterc.a", "artifacts/deps/libclang_builtins.a"]

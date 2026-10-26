@@ -1,0 +1,7 @@
+# love build files
+*.zip
+*.love
+[Bb]uild/
+
+# vscode
+.vscode/

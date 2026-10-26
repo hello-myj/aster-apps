@@ -1,0 +1,1 @@
+DejaVu Sans is from the Ubuntu fonts-dejavu-core package, upstream https://dejavu-fonts.github.io/. See LICENSE-DejaVu.txt for the full font license and notices. Only UI text uses this font; upstream Kurland titles are retained.

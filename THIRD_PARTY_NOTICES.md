@@ -59,3 +59,10 @@ OpenOMF/vendor/UPSTREAM.md and retained upstream license files for provenance.
 The original-engine build also statically links wasi-libc and LLVM compiler
 builtins, and uses declaration-only SDL2/ENet headers; preserve their applicable
 component notices when distributing a build.
+
+
+## GoldMiner
+
+GoldMiner-Rebirth code is MIT, copyright Lazy_V. Original assets are described by upstream as sourced from the Internet and modified; the code licence does not establish asset redistribution rights. Aster C adapters and tools are GPL-3.0-or-later. See GoldMiner/vendor/UPSTREAM.md and vendor/upstream/LICENSE. WASI libc/compiler runtime dependency notices also apply to linked code.
+
+GoldMiner small UI text uses DejaVu Sans. The font and its full licence notices are retained in GoldMiner/vendor/fonts/DejaVuSans.ttf and LICENSE-DejaVu.txt. Upstream Kurland titles remain unchanged in style.
