@@ -1,0 +1,33 @@
+#pragma once
+#define HAVE_LIBC 1
+#define HAVE_STDINT_H 1
+#define HAVE_STDDEF_H 1
+#define HAVE_STDARG_H 1
+#define HAVE_STDLIB_H 1
+#define HAVE_STDIO_H 1
+#define HAVE_STRING_H 1
+#define HAVE_MATH_H 1
+#define HAVE_MEMCPY 1
+#define HAVE_MEMMOVE 1
+#define HAVE_MEMSET 1
+#define HAVE_MEMCMP 1
+#define HAVE_STRLEN 1
+#define HAVE_STRCHR 1
+#define HAVE_STRCMP 1
+#define HAVE_STRNCMP 1
+#define HAVE_STRDUP 1
+#define HAVE_STRSTR 1
+#define HAVE_SSCANF 1
+#define HAVE_VSNPRINTF 1
+#define SDL_JOYSTICK_DISABLED 1
+#define SDL_HAPTIC_DISABLED 1
+#define SDL_SENSOR_DISABLED 1
+#define SDL_LOADSO_DISABLED 1
+#define SDL_THREADS_DISABLED 1
+
+#define HAVE_CTYPE_H 1
+#define HAVE_LIMITS_H 1
+#define HAVE_FLOAT_H 1
+#define HAVE_INTTYPES_H 1
+#define HAVE_WCHAR_H 1
+#define HAVE_WCSLEN 1

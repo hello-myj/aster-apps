@@ -1,0 +1,27 @@
+[app]
+id = "aster.opentyrian"
+name = "OpenTyrian"
+description = "穿过星海与弹雨，重返像素银河。"
+version = "0.1.1"
+abi = "4.2.0"
+abi_min = "4.2"
+aot = false
+optimize = "Os"
+orientation = "landscape"
+category = "game"
+icon = "assets/icon.bin"
+stack = 65536
+initial_memory = 4194304
+max_memory = 4194304
+heap = 393216
+requires = ["display", "touch", "filesystem", "audio-out", "audio-effects", "audio-effects-memory"]
+permissions = ["fs"]
+sources = ["port/entry.c", "port/video.c", "port/sdl.c", "port/audio.c", "port/nortsong.c", "port/allocator.c", "port/wasi_adapter.c", "vendor/upstream/src/animlib.c", "vendor/upstream/src/arg_parse.c", "vendor/upstream/src/backgrnd.c", "vendor/upstream/src/config.c", "vendor/upstream/src/config_file.c", "vendor/upstream/src/demo.c", "vendor/upstream/src/destruct.c", "vendor/upstream/src/editship.c", "vendor/upstream/src/episodes.c", "vendor/upstream/src/file.c", "port/font.c", "port/localization.c", "port/fonthand.c", "vendor/upstream/src/game_menu.c", "vendor/upstream/src/helptext.c", "vendor/upstream/src/joystick.c", "vendor/upstream/src/jukebox.c", "vendor/upstream/src/keyboard.c", "vendor/upstream/src/logging.c", "vendor/upstream/src/lvllib.c", "vendor/upstream/src/lvlmast.c", "vendor/upstream/src/mainint.c", "vendor/upstream/src/memreader.c", "vendor/upstream/src/memwriter.c", "vendor/upstream/src/menus.c", "vendor/upstream/src/mouse.c", "vendor/upstream/src/mtrand.c", "vendor/upstream/src/musmast.c", "vendor/upstream/src/network.c", "vendor/upstream/src/nortvars.c", "vendor/upstream/src/opentyr.c", "vendor/upstream/src/palette.c", "vendor/upstream/src/params.c", "vendor/upstream/src/pcxload.c", "vendor/upstream/src/pcxmast.c", "vendor/upstream/src/picload.c", "vendor/upstream/src/player.c", "vendor/upstream/src/shots.c", "vendor/upstream/src/sndmast.c", "vendor/upstream/src/sprite.c", "vendor/upstream/src/starlib.c", "vendor/upstream/src/tyrian2.c", "vendor/upstream/src/varz.c", "vendor/upstream/src/vga256d.c", "vendor/upstream/src/vga_palette.c", "vendor/upstream/src/xmas.c"]
+[sdk]
+target = "xtensa"
+[build]
+includes = ["port/include", "vendor/upstream/src", "artifacts/deps/SDL2/include"]
+defines = ["TYRIAN_HEAP_BYTES=2359296", "__wasi__=1", "NDEBUG=1", "main=tyrian_main"]
+cflags = ["-flto", "-mbulk-memory", "-isystem", "artifacts/deps/wasi/include/wasm32-wasi", "-include", "port/include/compat.h", "-Wno-unused-parameter", "-Wno-missing-field-initializers"]
+ldflags = ["-flto", "-mbulk-memory", "-Wl,--export=__stack_pointer", "artifacts/deps/libasterc.a", "artifacts/deps/libclang_builtins.a"]
+
