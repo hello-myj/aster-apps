@@ -23,6 +23,25 @@
 
 真机：公共 SDK 的 `aster.exe deploy dist/xtensa/aster.touchtest.ast --target xtensa --port <实际串口> --run`。
 
+### ESP32-P4
+
+配套 SDK 的 `riscv` 目标可生成 P4 的 RV32 ILP32F AOT，原有 Xtensa 默认目标保留。
+在项目目录使用支持 P4 的 SDK：
+
+```text
+python ../../aster-sdk/tools/aster.py build . --target riscv
+python ../../aster-sdk/tools/deploy.py dist/riscv/aster.touchtest.ast --target riscv --port COM11 --run
+```
+
+P4 的 480×480 RGB565 画布需要 460800 字节。应用内存上限改为 2 MiB，避免原
+1 MiB 预算在 P4 运行时保留初始内存后，无足够的托管堆创建画布。初始内存和栈不变。
+新版 P4 固件支持 ST7123 五点触摸，应用应显示 `reported_max=5`，并按稳定槽位绘制各指轨迹。
+新版已烧录 P4 v3.2，实机 AOT 启动日志确认 `reported_max=5`、状态 RUNNING。
+固件五指事件链路已通过 WASM/AOT 桥接回归；实际五指同时拖动、交叉和独立抬起效果待用户确认。
+已在 P4 v3.2 上通过共享 UART 的 ASTERFS 3 上传、安装并以 AOT 启动，实际画布
+480×480、状态 RUNNING；用户确认文字、彩色触点和单指拖动轨迹正常。
+本机记录保存在忽略目录 `artifacts/p4/serial-deploy.log` 和 `artifacts/p4/running.log`。
+
 项目源码、工具和产物均在此目录；SDK 共用 `../../aster-sdk`。构建通过不代表已完成多指真机验收。
 ## 本次交付记录
 
