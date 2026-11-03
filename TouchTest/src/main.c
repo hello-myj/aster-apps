@@ -164,7 +164,7 @@ ASTER_APP_EXPORT int aster_app_init(void) {
     rc=aster_surface_create(&desc,sizeof(desc),&surface);if(rc<0)return rc;
     aster_ge_init(&ge,surface,width,height,commands,1024,arena,sizeof(arena));
     clear_contacts();
-    rc=aster_app_set_framerate(30);if(rc<0){release();return rc;}
+    rc=aster_app_set_framerate(60);if(rc<0){release();return rc;}
     aster_printf("TouchTest %ux%u reported_max=%u tracked_capacity=%u",width,height,reported_max,CONTACTS);
     return ASTER_OK;
 }

@@ -11,7 +11,7 @@ typedef struct {const char *id,*name;int w,h,offset;float speed;} CarDef;
 #include "catalog.h"
 #define RACERS 6
 #define PI 3.14159265f
-#define RESOURCE "/data/resources/"
+#define RESOURCE "/assets/resources/"
 typedef struct {char magic[4];uint32_t w,h,bgN,fgN,wayN,bonusN,cw,ch,bgids,fgids,mat,mask,way,bonus,bgpix,fgpix,total,flags;} Map;
 typedef struct {float x,y;} Point;
 typedef struct {float x,y,vx,vy,angle,turbo,stuck,progress;int car,gate,passed,lap,finished;float finish_time;} Racer;
@@ -527,8 +527,10 @@ static void key(const aster_event_t *e){
 }
 ASTER_APP_EXPORT int aster_app_init(void){
     aster_display_info_t d={.size=sizeof(d),.version=1};int rc=aster_display_get_info(0,&d,sizeof(d));if(rc<0)return rc;
-    width=d.app_width;height=d.app_height;if(width!=480||height!=320)return ASTER_ENOTSUP;
-    aster_surface_desc_t desc={.size=sizeof(desc),.version=1,.width=width,.height=height,.format=ASTER_PIXEL_RGB565,.flags=0};
+    if(d.app_width<480||d.app_height<320)return ASTER_ENOTSUP;
+    /* Keep game coordinates stable; Host fits this canvas and maps touch. */
+    width=480;height=320;
+    aster_surface_desc_t desc={.size=sizeof(desc),.version=1,.width=width,.height=height,.format=ASTER_PIXEL_RGB565,.flags=ASTER_SURFACE_F_SCALE_FIT};
     rc=aster_surface_create(&desc,sizeof(desc),&surface);if(rc<0)return rc;
     rc=read_small("cars.bin",car_data,sizeof(car_data));if(rc<0){fail("Load cars",rc);return 0;}
     rc=read_small("title.bin",logo_data,sizeof(logo_data));if(rc<0){fail("Load title",rc);return 0;}

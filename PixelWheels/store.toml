@@ -1,0 +1,16 @@
+schema = 1
+id = "aster.pixelwheels"
+
+[[variants]]
+target = "riscv"
+package = "dist/riscv/aster.pixelwheels.ast"
+resources = "dist/resources"
+boards = ["osptek-p4-st7102"]
+screens = [[480, 480]]
+
+[[variants]]
+target = "wasm"
+package = "build/sim/dist/riscv/aster.pixelwheels.ast"
+resources = "dist/resources"
+boards = ["aster.simulator"]
+screens = [[480, 480], [480, 320]]

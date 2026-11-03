@@ -17,7 +17,7 @@ static void report_error(const char *operation,int32_t rc){
  if(audio_errors<=8)aster_logf(ASTER_LOG_WARN,"AUDIO41 %s error=%d",operation,rc);
 }
 static int32_t load_effect(const char *name){
- char path[128];aster_snprintf(path,sizeof(path),"/data/resources/audio/%s",name);
+ char path[128];aster_snprintf(path,sizeof(path),"/assets/resources/audio/%s",name);
  int32_t handle=aster_audio_effect_load(path,strlen(path));
  if(handle<=0)report_error(name,handle<0?handle:ASTER_EIO);
  return handle;
@@ -79,7 +79,7 @@ void audio_begin(void){
  audio_prepare();if(!available)return;
  /* RC1 start_file still replaces the playback session. Start BGM before loops. */
  stop_loop(&engine_voice,0);stop_loop(&brake_voice,0);
- const char *path="/data/resources/audio/music.mp3";
+ const char *path="/assets/resources/audio/music.mp3";
  int32_t rc=aster_audio_start_file(path,strlen(path));report_error("music start",rc);
  music_requested=rc>=0;
  engine_voice.active=brake_voice.active=false;

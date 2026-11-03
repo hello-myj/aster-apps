@@ -1,5 +1,7 @@
 # Pixel Wheels → Aster：移植版 0.1.6
 
+当前商城版本的 P4 构建、资源路径和发布步骤见 [商城应用构建](../docs/market-apps.zh-CN.md)。旧版手工 SD 部署说明不适用于新的 `/assets` 资源布局。
+
 基于 Aurélien Gâteau / agateau/pixelwheels 的原图、原 TMX 地图和车辆定义实现 C/WASM 运行层。480×320 横屏，在官方 Aster 模拟器中运行，保留未来 Xtensa AOT 构建路径。一个项目对应此完整文件夹。
 
 ## 运行

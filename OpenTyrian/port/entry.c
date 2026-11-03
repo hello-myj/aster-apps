@@ -19,6 +19,9 @@ static struct { uint32_t current, end; } coroutine;
 static uint32_t clock_ms, wake_ms, last_host, report_ms, presented;
 static int suspended, started, done, exit_code, paused, cleaned, rewinding;
 int tyrian_main(int argc,char **argv);
+/* An indirect boundary keeps the engine out of the callback that directly
+ * controls Asyncify. Instrument indirect calls during the lowering pass. */
+static int (*volatile engine_main)(int,char **)=tyrian_main;
 int tyrian_drop_cache(void) { return 0; }
 uint32_t tyrian_ticks(void) { return clock_ms; }
 
@@ -60,7 +63,7 @@ ASTER_APP_EXPORT __attribute__((noinline)) void aster_app_event(const aster_even
     uint32_t now=aster_time_now_ms(), delta=now-last_host;last_host=now;
     if(delta>100)delta=100; /* freeze suspended time instead of runaway catch-up */
     uint32_t target=started?clock_ms+delta:0;
-    static char *args[]={"opentyrian","--data=/data/resources",NULL};
+    static char *args[]={"opentyrian","--data=/assets/resources",NULL};
     for(unsigned budget=0;budget<128&&!done;budget++) {
         if(suspended) {
             if((int32_t)(wake_ms-target)>0)break;
@@ -72,7 +75,7 @@ ASTER_APP_EXPORT __attribute__((noinline)) void aster_app_event(const aster_even
          * Asyncify preserves WASM locals, but does not relocate C stack data. */
         uint32_t host_sp=engine_stack_get();
         engine_stack_set(engine_sp);
-        int rc=tyrian_main(2,args);
+        int rc=engine_main(2,args);
         engine_sp=engine_stack_get();
         engine_stack_set(host_sp);
         if(suspended)async_stop_unwind();

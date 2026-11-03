@@ -42,7 +42,7 @@ def main():
  if not (D/"libclang_builtins.a").exists():
   with tarfile.open(D/FILES[1][0]) as t:
    m=next(m for m in t if m.isfile() and m.name.endswith(".a"));write("libclang_builtins.a",t.extractfile(m).read())
- ar=args.sdk/"toolchain/wasi-sdk-24.0-x86_64-windows/bin/llvm-ar.exe"
+ ar=Path(os.environ["ASTER_WASI_SDK"])/"bin/llvm-ar" if os.environ.get("ASTER_WASI_SDK") and os.name!="nt" else args.sdk/"toolchain/wasi-sdk-24.0-x86_64-windows/bin/llvm-ar.exe"
  if not ar.exists():raise FileNotFoundError(ar)
  shutil.copyfile(D/"wasi/lib/wasm32-wasi/libc.a",D/"libasterc.a")
  subprocess.run([str(ar),"d",str(D/"libasterc.a"),"__wasilibc_real.o"],check=True)

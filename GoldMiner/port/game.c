@@ -146,28 +146,34 @@ void gm_key(const char *key){
  if(gm_paused){if(!strcmp(key,"return")){gm_paused=0;gm_audio_pause(0);}else if(!strcmp(key,"menu")){gm_paused=0;gm_audio_pause(0);enter(S_MENU);}else if(!strcmp(key,"quit"))gm_exit=1;return;}
  int ok=!strcmp(key,"return")||!strcmp(key,"j")||!strcmp(key,"k");
  if(gm_state==S_MENU){if(!strcmp(key,"up"))menuIndex=0;else if(!strcmp(key,"down"))menuIndex=1;else if(ok){if(menuIndex)enter(S_HIGH);else start();}}
+ else if(gm_state==S_GOAL&&ok){gm_audio_stop(A_GOAL);enter(S_GAME);}
+ else if(gm_state==S_MADE_GOAL&&ok){gm_audio_stop(A_MADE);enter(S_SHOP);}
  else if(gm_state==S_HIGH||gm_state==S_NEW_HIGH)enter(S_MENU);
  else if(gm_state==S_OVER){if(p.money>highScore){highScore=p.money;highLevel=p.level;gm_save(highScore,highLevel);enter(S_NEW_HIGH);}else enter(S_MENU);}
  else if(gm_state==S_SHOP){if(!strcmp(key,"left")){if(selectIndex>0)selectIndex--;}else if(!strcmp(key,"right")){if(selectIndex+1<itemCount)selectIndex++;}else if(ok)buy();else if(!strcmp(key,"space"))finishShopping=1;}
  else if(gm_state==S_GAME){if((!strcmp(key,"down")||ok)&&!h.showBonus&&!h.firing){h.firing=1;aster_printf("GoldMiner release angle=%d",(int)h.angle);gm_audio_play(A_START);}else if(!strcmp(key,"up"))use_bomb();else if(!strcmp(key,"space")&&p.money>=p.goal)enter(S_MADE_GOAL);}
 }
 void gm_touch(int x,int y){
- if(gm_paused){if(y>=75&&y<112)gm_key("return");else if(y>=112&&y<147)gm_key("menu");else if(y>=147&&y<185)gm_key("quit");return;}
- if(y>=240){if(x<52){gm_key("pause");return;}
-  if(gm_state==S_SHOP)gm_key(x<107?"left":x<163?"right":x<242?"return":"space");
-  else if(gm_state==S_GAME)gm_key(x<145?"down":x<235?"up":"space");
-  else gm_key(x<115?"up":x<199?"down":"return");return;
+ if(x<0||x>=320||y<0||y>=240)return;
+ if(x>=264&&y<30){gm_key("pause");return;}
+ if(gm_paused){if(x<48||x>=272)return;if(y>=75&&y<112)gm_key("return");else if(y>=112&&y<147)gm_key("menu");else if(y>=147&&y<185)gm_key("quit");return;}
+ if(gm_state==S_MENU){if(x<18||x>220)return;if(y>=140&&y<169)menuIndex=0;else if(y>=169&&y<205)menuIndex=1;else return;gm_key("return");}
+ else if(gm_state==S_GAME){
+  if(p.bombs>0&&x>=100&&x<149&&y<40)gm_key("up");
+  else if(p.money>=p.goal&&x<100&&y<40)gm_key("space");
+  else gm_key("down");
  }
- if(gm_state==S_MENU){if(y>=169&&y<205)menuIndex=1;else menuIndex=0;gm_key("return");}
- else if(gm_state==S_GAME)gm_key("down");
- else if(gm_state==S_SHOP){for(int i=0;i<itemCount;i++){int center=30+items[i]*42;if(abs(x-center)<23&&y>=130&&y<=195){selectIndex=i;buy();break;}}}
+ else if(gm_state==S_SHOP){
+  if(x>=220&&y>=90&&y<205){gm_key("space");return;}
+  for(int i=0;i<itemCount;i++){int center=30+items[i]*42;if(abs(x-center)<23&&y>=130&&y<=195){selectIndex=i;buy();break;}}
+ }
  else gm_key("return");
 }
 static void number(int font,int value,float x,float y,uint16_t color,const char *prefix){char s[80];snprintf(s,sizeof(s),"%s%d",prefix,value);gm_text(font,s,x,y,color);}
 static void goal_page(void){plain("bg_goal.png",0,0);plain("text_goldminer.png",54,20);plain("panel.png",27,80);}
 static const char *propImage[]={"dynamite.png","strength_drink.png","lucky_clover.png","rock_collectors_book.png","gem_polish.png"};
 static const char *description[]={
- "After you grab something, press UP\nto throw dynamite and blow it up.",
+ "Tap the dynamite icon after a grab\nto blow up the caught object.",
  "Strength drink. Reel up objects faster\non the next level. Lasts one level.",
  "Lucky clover. Better chances of good\nthings from grab bags. One level.",
  "Rock collector's book. Rocks are worth\nthree times as much on the next level.",
@@ -180,15 +186,16 @@ void gm_render(void){
  else if(gm_state==S_OVER){goal_page();gm_text(2,"You didn't reach the goal!",50,130,YELLOW);}
  else if(gm_state==S_SHOP){
   plain("bg_shop.png",0,0);plain("text_goldminer.png",54,5);plain("ui_dialogue_bubble.png",25,70);
-  gm_text(4,shopSad==2?"You don't seem to have any money\n:(":finishShopping?(bought?"Thank you for your patronage!\nGood luck!":"  :("):"Left/Right to select. Enter to buy.\nPress NEXT when you are ready.",30,75,0);
+  gm_text(4,shopSad==2?"You don't seem to have any money\n:(":finishShopping?(bought?"Thank you for your patronage!\nGood luck!":"  :("):"Tap items to buy.\nTap the keeper to continue.",30,75,0);
   image("shopkeeper_sheet.png",shopSad==1,220,100,0,1,1,0,0);plain("shop_table.png",7,176);
+  if(!finishShopping)gm_text(1,"Continue",232,185,YELLOW);
   for(int i=0;i<itemCount;i++){int item=items[i],x=30+item*42;const char *file=propImage[item];image(file,0,x,176,0,1,1,gm_width(file)/2.f,gm_height(file));number(4,prices[item],x-gm_width(file)/2,179,GREEN,"$");}
   if(!finishShopping&&itemCount&&selectIndex<itemCount){int item=items[selectIndex];image("ui_selector.png",0,30+item*42,130,0,1,1,6,14);gm_text(1,description[item],25,195,YELLOW);}
  }else if(gm_state==S_GAME){
   plain("bg_top.png",0,0);char bg[32];snprintf(bg,sizeof(bg),"bg_level_%c.png",'A'+layout->bg);plain(bg,0,40);
-  gm_text(4,"Money",5,5,0x6200);number(4,p.viewMoney,47,5,0x0340," $");gm_text(4,"Goal",11,15,0x6200);number(4,p.goal,47,15,0x0340," $");
-  gm_text(4,"Time:",260,15,0x6200);number(4,(int)timeLeft,290,15,0x8200,"");gm_text(4,"Level:",250,25,0x6200);number(4,p.level,290,25,0x8200,"");
-  if(p.money>=p.goal)gm_text(4,"Press NEXT to Skip",200,5,ORANGE);
+  gm_text(4,"Money",5,5,0x6200);number(4,p.viewMoney,47,5,0x0340," $");gm_text(4,"Goal",11,15,p.money>=p.goal?GREEN:0x6200);number(4,p.goal,47,15,0x0340," $");
+  gm_text(4,"Time:",206,10,0x6200);number(4,(int)timeLeft,242,10,0x8200,"");gm_text(4,"Level:",200,25,0x6200);number(4,p.level,242,25,0x8200,"");
+  if(p.money>=p.goal)gm_line(10,28,95,28,GREEN,255);
   if(bonusView>0)number(5,p.currentBonus,90,18,GREEN,"$");
   if(strengthView>0)plain("text_strength.png",80,10);
   int frame=0;if(strengthView>0)frame=((int)(p.anim/.13f)%2)?7:6;else if(p.useTimer>0)frame=3+(int)(p.anim/.13f)%3;else if(h.firing)frame=h.backing?(int)(p.anim/.13f)%3:2;
@@ -201,9 +208,9 @@ void gm_render(void){
    if(e->type==MOLE||e->type==DIAMONDMOLE)image(images[e->type],e->moving?(int)(e->anim/.15f)%7:0,e->x,e->y,e->grabbed?h.angle:0,-e->dir,1,9,6.5f);
    else image(images[e->type],0,e->x,e->y,e->grabbed?h.angle:0,1,1,e->grabbed?e->w/2.f:0,e->grabbed?e->h/3.f:0);
   }
-  for(int i=0;i<p.bombs;i++)plain("ui_dynamite.png",195+(i%6)*5,i<6?22:12);
+  for(int i=0;i<p.bombs;i++)plain("ui_dynamite.png",108+(i%6)*5,i<6?22:12);
   gm_line(158,30,h.x,h.y,0x4208,255);image("hook_sheet.png",h.frame,h.x,h.y,h.angle,1,1,6.5,0);
   if(h.explosion>0)image("explosive_fx_sheet.png",(int)((.5f-h.explosion)/.2f)%12,h.ex,h.ey,h.angle,1,1,32,32);
  }
- if(gm_paused){gm_rect(0,0,320,240,0,170);gm_rect(48,42,224,158,0x2104,255);gm_text(1,"PAUSED",120,52,0xffff);gm_text(1,"CONTINUE / ENTER",92,88,0xffff);gm_text(1,"RETURN TO MENU",92,123,YELLOW);gm_text(1,"QUIT GAME",92,158,0xf800);}
+ if(gm_paused){gm_rect(0,0,320,240,0,170);gm_rect(48,42,224,158,0x2104,255);gm_text(1,"PAUSED",120,52,0xffff);gm_text(1,"RESUME",92,88,0xffff);gm_text(1,"MAIN MENU",92,123,YELLOW);gm_text(1,"EXIT GAME",92,158,0xf800);}
 }

@@ -1,0 +1,23 @@
+schema = 1
+id = "aster.goldminer"
+
+[[variants]]
+target = "riscv"
+package = "dist/riscv/aster.goldminer.ast"
+resources = "dist/riscv/resources"
+boards = ["osptek-p4-st7102"]
+screens = [[480, 480]]
+
+[[variants]]
+target = "xtensa"
+package = "dist/xtensa/aster.goldminer.ast"
+resources = "dist/xtensa/resources"
+boards = ["aster.esp32s3.lckfb"]
+screens = [[320, 240]]
+
+[[variants]]
+target = "wasm"
+package = "build/sim/dist/riscv/aster.goldminer.ast"
+resources = "dist/riscv/resources"
+boards = ["aster.simulator"]
+screens = [[480, 480]]

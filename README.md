@@ -4,6 +4,10 @@ Aster 应用项目集合：一个应用对应一个独立文件夹，项目代�
 
 ## 当前项目
 
+- [StoreServer](StoreServer/README.md)：Python 本地应用分发服务器，支持程序与独立资源、硬件兼容过滤、摘要校验与分段下载。
+- [AppStore](AppStore/README.md)：设备端商城，ABI 4.3，目录、详情、下载、安装和打开应用。
+- [StoreDemo](StoreDemo/README.md)：商城安装验证，包含独立的 1 MiB 测试资源。
+
 - [OutRun](OutRun/README.md)：OutRun 重制版移植，微雪 480×320 横屏、虚拟按键、地图选择、连续引擎音，ABI 4.1 / Xtensa AOT。
 - [TouchTest](TouchTest/README.md)：多指触控测试，显示触点编号、彩色轨迹、坐标、双指距离与事件统计，ABI 4.1 / Xtensa AOT。
 
@@ -11,7 +15,7 @@ Aster 应用项目集合：一个应用对应一个独立文件夹，项目代�
 
 - [OpenOMF](OpenOMF/README.md)：OpenOMF 0.2.14 原引擎移植，支持模拟器和微雪实机，原版战斗/AI/菜单与锦标赛存档；需要 ABI 4.2，实机约3.8–6.3FPS，仍有平台能力差异。
 
-- [GoldMiner](GoldMiner/README.md)：经典黄金矿工原生C移植，原关卡、商店与音效，1.25MiB线性内存，已通过Aster模拟器与微雪实机试玩；原生480×320清晰度版约12.2–12.4FPS。
+- [GoldMiner](GoldMiner/README.md)：经典黄金矿工原生 C 移植，原关卡、商店与音效；0.2.0 采用全触屏操作，只留透明 MENU，提供 P4 480×480 和立创 S3 320×240 的独立 AOT/素材变体。
 
 - [OpenTyrian](OpenTyrian/README.md)：原版 C 引擎纵向卷轴射击，四章资源、原商店与战斗逻辑，480×320 横屏透明按键，ABI 4.2；目前为模拟器移植，实机待验证。
 
@@ -30,6 +34,10 @@ aster/
 新项目直接放在 APPS 下，与现有项目平级；不把项目依赖的原始素材拆到 APPS 的另一个项目文件夹。
 
 ## 构建
+
+商城发布约定见 [应用与资源规划](docs/app-store-plan.zh-CN.md)。新工程可用 `store.toml` 声明已验证的板级变体；编译包与生成资源分别放在 `dist/<target>`、`dist/resources`。服务端由 APPS 根目录执行 `python -m StoreServer serve`，无须启动固件或 SDK。
+
+现有六个应用的 P4 构建、资源迁移与发布步骤见 [商城应用构建](docs/market-apps.zh-CN.md)。
 
 安装兼容的 Aster SDK 后，进入各项目执行 `./tools/build.ps1`；模拟运行执行 `./tools/run-sim.ps1`，具体要求见项目 README。OutRun 的部分脚本仍记录当前开发机 SDK 路径，更换开发机时需同步配置。
 

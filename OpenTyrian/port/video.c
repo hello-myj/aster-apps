@@ -27,10 +27,12 @@ int tyrian_video_init(void){
  int rc=aster_display_get_info(0,&info,sizeof(info));if(rc<0)return rc;
  width=info.app_width;height=info.app_height;
  if(width<320||height<200||width>1024||height>768)return ASTER_ENOTSUP;
+ /* Game controls use a landscape canvas. Host letterboxes on square panels. */
+ if(width==480&&height==480)height=320;
  view_w=width;view_h=view_w*200/320;
  if(view_h>height){view_h=height;view_w=view_h*320/200;}
  left=(width-view_w)/2;top=(height-view_h)/2;
- aster_surface_desc_t desc={.size=sizeof(desc),.version=1,.width=width,.height=height,.format=ASTER_PIXEL_RGB565};
+ aster_surface_desc_t desc={.size=sizeof(desc),.version=1,.width=width,.height=height,.format=ASTER_PIXEL_RGB565,.flags=ASTER_SURFACE_F_SCALE_FIT};
  return aster_surface_create(&desc,sizeof(desc),&surface);
 }
 void init_video(void){

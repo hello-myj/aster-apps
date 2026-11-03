@@ -22,7 +22,7 @@ void tyrian_audio_set_xmas(bool xmas){
  unsigned total=0;
  for(int i=0;i<SOUND_COUNT;i++){
   free(wave_data[i]);wave_data[i]=NULL;wave_bytes[i]=0;
-  char path[96];snprintf(path,sizeof(path),"/data/audio/sfx/%03d.wav",i+(xmas?100:0));
+  char path[96];snprintf(path,sizeof(path),"/assets/audio/sfx/%03d.wav",i+(xmas?100:0));
   FILE *f=fopen(path,"rb");
   if(f){fseek(f,0,SEEK_END);long n=ftell(f);rewind(f);
    if(n>=44&&n<=69632){void *data=malloc(n);if(data){if(fread(data,1,n,f)==(size_t)n){wave_data[i]=data;wave_bytes[i]=n;total+=n;}else free(data);}}
@@ -35,7 +35,7 @@ void tyrian_audio_set_xmas(bool xmas){
 void play_song(unsigned n){
  if(audio_disabled||music_disabled)return;
  if(loaded==(int)n&&!stopped)return;
- char path[96];snprintf(path,sizeof(path),"/data/audio/music/%02u.mp3",n);
+ char path[96];snprintf(path,sizeof(path),"/assets/audio/music/%02u.mp3",n);
  int rc=aster_audio_start_file(path,strlen(path));
  if(rc<0){char msg[128];snprintf(msg,sizeof(msg),"music %u error %d",n,rc);aster_log(2,msg,strlen(msg));return;}
  loaded=n;song_playing=n;stopped=false;playing=true;songlooped=false;

@@ -2,7 +2,7 @@
 id = "aster.opentyrian"
 name = "OpenTyrian"
 description = "穿过星海与弹雨，重返像素银河。"
-version = "0.1.1"
+version = "0.1.2"
 abi = "4.2.0"
 abi_min = "4.2"
 aot = false
@@ -12,7 +12,7 @@ category = "game"
 icon = "assets/icon.bin"
 stack = 65536
 initial_memory = 4194304
-max_memory = 4194304
+max_memory = 5242880
 heap = 393216
 requires = ["display", "touch", "filesystem", "audio-out", "audio-effects", "audio-effects-memory"]
 permissions = ["fs"]

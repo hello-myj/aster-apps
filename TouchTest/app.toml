@@ -2,7 +2,7 @@
 id = "aster.touchtest"
 name = "多指触控测试"
 description = "指尖落下，各有光芒。实时查看多指、坐标与轨迹。"
-version = "1.0.0"
+version = "1.0.1"
 abi = "4.1.0"
 abi_min = "4.1"
 aot = true

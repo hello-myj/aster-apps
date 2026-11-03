@@ -1,6 +1,6 @@
 """Prepare pinned sources and original assets for the Aster port."""
 from pathlib import Path
-import ast, hashlib, io, json, os, re, shutil, struct, subprocess, sys, tarfile, urllib.request, wave
+import argparse, ast, hashlib, io, json, os, re, shutil, struct, subprocess, sys, tarfile, urllib.request, wave
 from PIL import Image, ImageFont
 
 P = Path(__file__).resolve().parents[1]
@@ -62,11 +62,11 @@ def prepare_libc():
                 m=next(m for m in t if m.isfile() and m.name.endswith('.a'))
                 (out/'libclang_builtins.a').write_bytes(t.extractfile(m).read())
     shutil.copyfile(out/'wasi/lib/wasm32-wasi/libc.a',out/'libasterc.a')
-    ar=SDK/'toolchain/wasi-sdk-24.0-x86_64-windows/bin/llvm-ar.exe'
+    ar=Path(os.environ['ASTER_WASI_SDK'])/'bin/llvm-ar' if os.environ.get('ASTER_WASI_SDK') and os.name!='nt' else SDK/'toolchain/wasi-sdk-24.0-x86_64-windows/bin/llvm-ar.exe'
     subprocess.run([str(ar),'d',str(out/'libasterc.a'),'__wasilibc_real.o'],check=True)
 
-def prepare_assets():
-    assets=P/'assets';assets.mkdir(exist_ok=True)
+def prepare_assets(scale=1.0, output=None):
+    assets=output or P/'assets';assets.mkdir(parents=True,exist_ok=True)
     records=[]
     def add(name,data,w=0,h=0,kind=0):records.append((name,data,w,h,kind))
     sheets={'miner_sheet':(32,40),'shopkeeper_sheet':(80,80),'hook_sheet':(13,15),
@@ -81,7 +81,8 @@ def prepare_assets():
             for xx in range(0,w,fw):
                 tile=im.crop((xx,yy,xx+fw,yy+fh))
                 # Resize once offline with premultiplied alpha; runtime copies native pixels.
-                tile=tile.convert('RGBa').resize((round(fw*1.2),round(fh*1.2)),Image.Resampling.LANCZOS).convert('RGBA')
+                if scale != 1:
+                    tile=tile.convert('RGBa').resize((max(1,round(fw*scale)),max(1,round(fh*scale))),Image.Resampling.LANCZOS).convert('RGBA')
                 opaque=f.name.startswith('bg_')
                 if opaque:
                     black=Image.new('RGBA',tile.size,(0,0,0,255));black.alpha_composite(tile);tile=black
@@ -93,10 +94,10 @@ def prepare_assets():
                 add(f'pixel/{f.name}/{xx//fw+(yy//fh)*(w//fw)}',raw,tile.width,tile.height,0 if opaque else 1)
     # Rasterize text at its final screen size, with an open sans face for small UI.
     font_defs=[(P/'vendor/fonts/DejaVuSans.ttf',12),(P/'vendor/fonts/DejaVuSans.ttf',12),
-               (UP/'fonts/Kurland.ttf',24),(UP/'fonts/Kurland.ttf',12),
-               (P/'vendor/fonts/DejaVuSans.ttf',12),(UP/'fonts/Kurland.ttf',19)]
+               (UP/'fonts/Kurland.ttf',20),(UP/'fonts/Kurland.ttf',12),
+               (P/'vendor/fonts/DejaVuSans.ttf',12),(UP/'fonts/Kurland.ttf',16)]
     for fid,(file,size) in enumerate(font_defs):
-        font=ImageFont.truetype(str(file),size)
+        font=ImageFont.truetype(str(file),max(1,round(size*scale)))
         ascent,descent=font.getmetrics(); line=ascent+descent
         glyphs=[];pixels=bytearray()
         for code in range(32,127):
@@ -125,15 +126,19 @@ def prepare_assets():
         # Goal jingles use the background-file API; effects keep full samples.
     names=['money.wav','hook_reset.wav','grab_start.mp3','grab_back.wav','explosive.wav','high_value.wav','normal_value.wav','low_value.wav','goal.mp3','made_goal.mp3']
     (P/'port/audio_meta.h').write_text('static const unsigned sound_ms[]={'+','.join(str(round(durations[n]*1000)) for n in names)+'};\n',encoding='utf-8')
-    offset=8+len(records)*80;table=bytearray();payload=bytearray()
+    offset=16+len(records)*80;table=bytearray();payload=bytearray()
     for name,data,w,h,kind in records:
         encoded=name.encode();assert len(encoded)<64
         table.extend(struct.pack('<64sIIHHI',encoded,offset,len(data),w,h,kind));payload.extend(data);offset+=len(data)
-    (assets/'game.gma').write_bytes(struct.pack('<4sI',b'GMA1',len(records))+table+payload)
+    (assets/'game.gma').write_bytes(struct.pack('<4sIII',b'GMA2',len(records),round(scale*65536),0)+table+payload)
     icon=Image.open(UP/'images/icon.png').convert('RGBA').resize((64,64),Image.Resampling.LANCZOS)
     icon.save(assets/'icon.png')
     subprocess.run([sys.executable,str(SDK/'tools/icon_convert.py'),str(assets/'icon.png'),'-o',str(assets/'icon.bin'),'--format','rgb565a8','--size','48'],check=True)
     print('Prepared',len(records),'records,',offset,'asset bytes; audio seconds',durations)
 
 if __name__=='__main__':
-    prepare_libc();prepare_levels();prepare_assets()
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--scale',type=float,choices=[1.0,1.5],default=1.0)
+    parser.add_argument('--output',type=Path)
+    args=parser.parse_args()
+    prepare_libc();prepare_levels();prepare_assets(args.scale,args.output)

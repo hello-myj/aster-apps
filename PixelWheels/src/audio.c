@@ -17,7 +17,7 @@ static float clamp(float x,float lo,float hi){return x<lo?lo:x>hi?hi:x;}
 static float absolute(float x){return x<0?-x:x;}
 static int due(uint32_t now,uint32_t at){return (int32_t)(now-at)>=0;}
 static void result(const char *op,int rc){if(rc<0&&errors++<12)aster_logf(ASTER_LOG_WARN,"PW AUDIO %s rc=%d",op,rc);}
-static int32_t load(const char *name){char path[128];aster_snprintf(path,sizeof(path),"/data/resources/%s",name);int32_t h=aster_audio_effect_load(path,strlen(path));if(h<=0)result(name,h<0?h:ASTER_EIO);return h;}
+static int32_t load(const char *name){char path[128];aster_snprintf(path,sizeof(path),"/assets/resources/%s",name);int32_t h=aster_audio_effect_load(path,strlen(path));if(h<=0)result(name,h<0?h:ASTER_EIO);return h;}
 static void drop(Voice *v){if(v->handle>0){aster_audio_effect_stop(v->handle,0);aster_audio_effect_unload(v->handle);}v->handle=0;v->active=0;v->index=-1;v->pitch=v->gain=0;}
 static void loop(Voice *v,uint32_t pitch,uint32_t gain,uint32_t crossfade,uint32_t now,const char *label){
     if(v->handle<=0||!due(now,v->retry_at))return;
@@ -45,7 +45,7 @@ void pw_audio_begin(const char *theme){
     if(!prepared){available=aster_system_has_feature(ASTER_FEATURE_AUDIO_OUTPUT)>0;prepared=1;}
     pw_audio_stop();if(!available)return;
     memset(last_event,0,sizeof(last_event));
-    char path[128];aster_snprintf(path,sizeof(path),"/data/resources/%s.mp3",theme);
+    char path[128];aster_snprintf(path,sizeof(path),"/assets/resources/%s.mp3",theme);
     int rc=aster_audio_start_file(path,strlen(path));result("music",rc);
     // Let the RC1 session handoff settle before arming continuous effects.
     clock_at=aster_time_now_ms();loops_after=clock_at+250;last_tick=clock_at;running=1;

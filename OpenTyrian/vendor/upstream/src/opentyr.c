@@ -748,7 +748,7 @@ void setupMenu(void)
 	}
 }
 
-int main(int argc, char *argv[])
+__attribute__((noinline)) int main(int argc, char *argv[])
 {
 #ifndef NDEBUG
 	SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_DEBUG);

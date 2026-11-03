@@ -5,7 +5,7 @@ static Image cache[80];static uint16_t cached_slot[2048];static uint32_t age;
 /* OPK1: seekable SD archive. Header/index only live in RAM; pixels remain LRU. */
 static bool bundle_checked,bundle_available;
 static uint32_t image_entries[2048][2],map_entries[16][2],bundle_images,bundle_total,bundle_version,font_entry[2];
-static const char bundle_path[]="/data/resources/resources.pak";
+static const char bundle_path[]="/assets/resources/resources.pak";
 static int exact_read(aster_handle_t f,void *dst,uint32_t n){
  uint32_t at=0;while(at<n){int r=aster_fs_read(f,(uint8_t*)dst+at,n-at);if(r<=0)return r<0?r:ASTER_EIO;at+=r;}return 0;
 }
@@ -30,13 +30,13 @@ static int resource_open(const char *rel,aster_handle_t *f,uint32_t *length){
   else if(!strncmp(rel,"map",3)){uint32_t i=decimal(rel+3);if(i<16)e=map_entries[i];}
   if(!e)return ASTER_EIO;
   uint32_t offset=e[0];char chunk_path[80];const char *path=bundle_path;
-  if(bundle_version==2){uint32_t chunk=offset>>24;offset&=0xffffff;if(chunk>31||offset>4194304||e[1]>4194304-offset)return ASTER_EIO;if(chunk){aster_snprintf(chunk_path,sizeof(chunk_path),"/data/resources/resources%02u.pak",chunk);path=chunk_path;}}
+  if(bundle_version==2){uint32_t chunk=offset>>24;offset&=0xffffff;if(chunk>31||offset>4194304||e[1]>4194304-offset)return ASTER_EIO;if(chunk){aster_snprintf(chunk_path,sizeof(chunk_path),"/assets/resources/resources%02u.pak",chunk);path=chunk_path;}}
   else if(offset>bundle_total||e[1]>bundle_total-offset)return ASTER_EIO;
   int r=aster_fs_open(path,strlen(path),ASTER_FS_O_RDONLY,f);if(r<0)return r;
   r=aster_fs_seek(*f,(int32_t)offset,ASTER_FS_SEEK_SET);if(r<0){aster_fs_close(*f);return r;}
   if(length)*length=e[1];return 0;
  }
- char path[160];aster_snprintf(path,sizeof(path),"/data/resources/%s",rel);if(length)*length=0xffffffffu;
+ char path[160];aster_snprintf(path,sizeof(path),"/assets/resources/%s",rel);if(length)*length=0xffffffffu;
  return aster_fs_open(path,strlen(path),ASTER_FS_O_RDONLY,f);
 }int read_file(const char *rel,void *dst,uint32_t size){
  aster_handle_t f;uint32_t available;int r=resource_open(rel,&f,&available);if(r<0)return r;

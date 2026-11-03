@@ -1,0 +1,15 @@
+schema = 1
+id = "aster.touchtest"
+
+# Only list tested hardware; same Xtensa/RISC-V architecture is insufficient.
+[[variants]]
+target = "riscv"
+package = "dist/riscv/aster.touchtest.ast"
+boards = ["osptek-p4-st7102"]
+screens = [[480, 480]]
+
+[[variants]]
+target = "wasm"
+package = "build/sim/dist/riscv/aster.touchtest.ast"
+boards = ["aster.simulator"]
+screens = [[480, 480], [480, 320]]

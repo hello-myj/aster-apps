@@ -30,7 +30,7 @@ static int bound(int x,int a,int b){return x<a?a:x>b?b:x;}
 static bool available(void){return true;}static const char *name(void){return "AsterSoftware";}static const char *description(void){return "Aster paletted software renderer";}
 static void create(renderer *r){r->ctx=frame;}
 static void destroy(renderer *r){}
-static bool setup(void *ctx,int w,int h,bool fs,bool vs,int aspect,int limit,int scale,int scaling){if(screen!=ASTER_HANDLE_INVALID)return true;aster_surface_desc_t d={.size=sizeof(d),.version=1,.width=480,.height=320,.format=ASTER_PIXEL_RGB565};return aster_surface_create(&d,sizeof(d),&screen)>=0;}
+static bool setup(void *ctx,int w,int h,bool fs,bool vs,int aspect,int limit,int scale,int scaling){if(screen!=ASTER_HANDLE_INVALID)return true;aster_surface_desc_t d={.size=sizeof(d),.version=1,.width=480,.height=320,.format=ASTER_PIXEL_RGB565,.flags=ASTER_SURFACE_F_SCALE_FIT};return aster_surface_create(&d,sizeof(d),&screen)>=0;}
 static void state(void *ctx,int *w,int *h,bool *fs,bool *vs,int *aspect,int *scale){if(w)*w=480;if(h)*h=320;if(fs)*fs=false;if(vs)*vs=false;if(aspect)*aspect=0;if(scale)*scale=1;}
 static void reset(void *ctx){omf_renderer_drop_cache();}
 static void close_context(void *ctx){omf_renderer_drop_cache();if(screen!=ASTER_HANDLE_INVALID){aster_surface_destroy(screen);screen=ASTER_HANDLE_INVALID;}}

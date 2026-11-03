@@ -1,0 +1,17 @@
+[app]
+id = "aster.store.demo"
+name = "商城资源演示"
+description = "验证商城独立资源分发，安装后检查文本和 1 MiB 数据资源。"
+version = "1.0.1"
+abi = "4.3.0"
+abi_min = "4.1"
+aot = true
+optimize = "Os"
+initial_memory = 786432
+max_memory = 2097152
+heap = 524288
+stack = 16384
+category = "tool"
+requires = ["display", "filesystem"]
+permissions = ["fs"]
+sources = ["src/main.c"]

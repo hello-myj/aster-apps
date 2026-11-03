@@ -1,5 +1,7 @@
 # OutRun 重制版 → Aster 4.1，0.3.1
 
+当前商城版本的 P4 构建、资源路径和发布步骤见 [商城应用构建](../docs/market-apps.zh-CN.md)。旧版手工 SD 部署说明不适用于新的 `/assets` 资源布局。
+
 由当前模型重新移植，参照 ZgzInfinity/OutRun 重制版。本版保留原赛道逐段高程与曲率、双路车道宽度、场景对象布置和轴点、车辆方向/坡度/制动/碰撞帧，并将绘图替换为 Aster RGB565 软件渲染。0.1 试版保留在 legacy-prototype/。
 
 ![起跑场景](artifacts/v2/start.png)

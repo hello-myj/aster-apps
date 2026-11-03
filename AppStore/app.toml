@@ -1,0 +1,21 @@
+[app]
+id = "aster.store"
+name = "Aster 商城"
+description = "按设备兼容性浏览、下载和安装应用及资源。"
+version = "0.1.1"
+orientation = "landscape"
+abi = "4.3.0"
+abi_min = "4.3"
+aot = true
+optimize = "Os"
+initial_memory = 1572864
+max_memory = 2097152
+heap = 786432
+stack = 16384
+category = "system"
+requires = ["display", "touch", "filesystem", "http"]
+permissions = ["net", "fs", "kv", "appmgr"]
+sources = ["src/main.c", "src/codec.c"]
+
+[build]
+defines = ['STORE_URL="http://127.0.0.1:9080"']
