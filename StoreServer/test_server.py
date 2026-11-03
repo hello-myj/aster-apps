@@ -8,10 +8,10 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urlencode
 from http.server import ThreadingHTTPServer
-from .server import publish, Store, handler, relative
+from .server import publish, Store, handler, relative, package_icon
 
 
-def package(path, target=2, version="1.0.0"):
+def package(path, target=2, version="1.0.0", icon=None):
     manifest = json.dumps({"id": "test.store.demo", "name": "商城测试", "version": version,
         "abi": {"min": "4.1", "target": "4.2.0"}, "requires": ["display", "touch"]}).encode()
     mo, wo = 64, (64+len(manifest)+3)&~3
@@ -19,10 +19,40 @@ def package(path, target=2, version="1.0.0"):
     hdr = bytearray(64);hdr[:4] = b"ASTP"
     struct.pack_into("<HHI", hdr, 4, 1, 64, 0)
     struct.pack_into("<9I", hdr, 12, mo, len(manifest), wo, 8, ao, 8, target, 0, 0)
-    path.write_bytes(hdr+manifest+b"\0"*(wo-64-len(manifest))+b"\0asm\1\0\0\0"+b"\0aot\1\0\0\0")
+    if icon:
+        struct.pack_into("<II", hdr, 40, ao+8, len(icon))
+    path.write_bytes(hdr+manifest+b"\0"*(wo-64-len(manifest))+b"\0asm\1\0\0\0"+b"\0aot\1\0\0\0"+(icon or b""))
 
 
 class ServerTest(unittest.TestCase):
+    def test_icons_are_derived_and_hardware_filtered(self):
+        import hashlib
+        icon = struct.pack("<4sHHHBBI", b"ASTI", 1, 2, 1, 4, 0, 6)+struct.pack("<HH", 0xf800, 0x001f)+bytes([255,0])
+        package(self.pkg, version="1.0.1", icon=icon)
+        key = publish(self.data,self.pkg,["osptek-p4-st7102"],screens=[[480,480]])
+        raw = (self.data/"releases"/key/"release.json").read_bytes()
+        with self.get('/v1/catalog') as response:
+            item = json.load(response)["items"][0]
+        self.assertEqual(item["release"],key)
+        with self.get('/v1/releases/'+key+'/icon') as response:
+            image = response.read()
+            self.assertEqual(response.headers['Content-Type'],'image/bmp')
+        self.assertEqual(item['icon'],{'bytes':len(image),'sha256':hashlib.sha256(image).hexdigest()})
+        self.assertEqual(image[:2],b'BM')
+        # 2:1 artwork is centered vertically; transparent blue becomes white.
+        self.assertEqual(image[54+24*144:54+24*144+3],b'\x00\x00\xff')
+        self.assertEqual(image[54+24*144+47*3:54+24*144+48*3],b'\xff\xff\xff')
+        self.assertEqual((self.data/"releases"/key/"release.json").read_bytes(),raw)
+        with self.get('/v1/releases/'+key+'/icon',self.dev|{'board':'other.p4'}) as response:
+            self.assertEqual(response.status,409)
+        with self.get('/v1/releases/'+self.key+'/icon') as response:
+            self.assertEqual(response.status,404)
+
+    def test_invalid_icon_is_optional_and_bounded(self):
+        for blob in (b'bad',struct.pack('<4sHHHBBI',b'ASTI',1,65535,1,3,0,2)+b'xx',
+                     struct.pack('<4sHHHBBI',b'ASTI',1,2,2,3,0,8)+b'xx'):
+            package(self.pkg,icon=blob)
+            self.assertIsNone(package_icon(self.pkg))
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory();self.root = Path(self.tmp.name)
         self.data = self.root / "data";self.pkg = self.root / "demo.ast"

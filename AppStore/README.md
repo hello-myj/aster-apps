@@ -2,6 +2,10 @@
 
 原生 C 应用，使用 Aster SDK 的绘图、触摸、HTTP(S)、文件系统和应用管理接口。需要 ABI 4.3 固件，权限为 `net`、`fs`、`kv`、`appmgr`。支持目录、详情、权限与体积提示、下载进度、取消、失败重试、打开已安装应用和服务地址设置。
 
+0.1.2 在列表和详情页显示应用图标，商城自身也带有 Launcher 图标。缩略图来自服务端对安装包 ASTI 图标的提取，不需要重新发布现有游戏。只加载可见条目，翻页或离开时释放固件图片句柄；480×480 当前最多四张、320×240 最多两张，RGB565 像素约占 18/9 KiB PSRAM（另有少量句柄开销）。无图标、网络失败或 SHA-256 不匹配时显示名称首字占位图。后台加载图标可以被点击操作中断，不阻塞应用下载安装。
+
+`assets/icon.svg` 是商城启动图标的可编辑源，`assets/icon.bin` 是配套 96×96 ASTI RGB565A8 产物，构建时一起复制到配置目录。
+
 ## 构建与运行
 
 SDK 默认位于 APPS 的同级目录 `aster-sdk`；也可用 `--sdk` 指定。先按 SDK 文档安装 WASI SDK 和对应 AOT 编译器。在 APPS 根目录运行：
@@ -38,6 +42,8 @@ lckfb 实机已验证：ABI 4.3、商城 0.1.1 Xtensa AOT 启动、Wi-Fi 目录�
 `tests/codec_test.c` 覆盖 JSON 边界和 SHA-256；`tests/store-flow.cjs` 使用真实商城 WASM、真实本地 HTTP 服务和模拟器 Host，检查目录、下载、安装后重启、外部资源及演示应用校验日志。
 
 `tests/layout-flow.cjs SMALL.ast LARGE.ast` 使用分别按 Xtensa/P4 堆配置构建的便携包，检查 320×240、480×480 界面，以及小屏地址输入、删除和无效地址拦截。需启动包中配置的 HTTP 服务；界面截图输出到 `artifacts/layout`。
+
+`tests/icon-flow.cjs SMALL.ast LARGE.ast` 使用本地 HTTP 测试服务验证真实图标解码、校验失败回退，以及慢速图标请求期间的按钮操作，截图输出到 `artifacts/icons`。
 
 运行流程测试前需发布 `StoreDemo --target wasm`，启动 9080 服务，并将无 AOT 的商城输出到 `AppStore/build/sim/dist/riscv/aster.store.ast`：
 

@@ -155,6 +155,53 @@ def publish(data, package, boards, resources=None, screens=None):
         return identity
 
 
+def package_icon(path, side=48):
+    """Read bounded ASTI art and produce a small, portable 24-bit BMP.
+
+    This is derived presentation data; immutable packages/release IDs stay intact.
+    Alpha is composited on the same white background as the Store's cards.
+    """
+    with path.open("rb") as stream:
+        header = stream.read(64)
+        if len(header) != 64 or header[:4] != b"ASTP":
+            return None
+        offset, length = struct.unpack_from("<II", header, 40)
+        if not length or length > 16 + 512*512*3 or offset < 64 or offset+length > path.stat().st_size:
+            return None
+        stream.seek(offset)
+        blob = stream.read(length)
+    if len(blob) < 16 or blob[:4] != b"ASTI":
+        return None
+    version_, width, height, fmt, _, size = struct.unpack_from("<HHHBBI", blob, 4)
+    if version_ != 1 or not (0 < width <= 512 and 0 < height <= 512):
+        return None
+    pixels = width*height
+    expected = {1: ((width+7)//8)*height, 2: pixels, 3: pixels*2, 4: pixels*3}.get(fmt)
+    if expected is None or size != expected or len(blob) < 16+size:
+        return None
+    def pixel(x, y):
+        i = y*width+x
+        if fmt in (3, 4):
+            v = struct.unpack_from("<H", blob, 16+i*2)[0]
+            r, g, b = (v >> 11)*255//31, ((v >> 5)&63)*255//63, (v&31)*255//31
+            alpha = blob[16+pixels*2+i] if fmt == 4 else 255
+        else:
+            r, g, b = 36, 102, 220
+            alpha = blob[16+i] if fmt == 2 else (255 if blob[16+y*((width+7)//8)+x//8] & (128 >> (x%8)) else 0)
+        return tuple((c*alpha+255*(255-alpha)+127)//255 for c in (b,g,r))
+    stride = (side*3+3)&~3
+    data = bytearray(stride*side)
+    # Fit rectangular artwork without stretching its aspect ratio.
+    dw, dh = (side, max(1, height*side//width)) if width >= height else (max(1, width*side//height), side)
+    data[:] = b"\xff"*len(data)
+    for y in range(dh):
+        for x in range(dw):
+            at = (side-1-((side-dh)//2+y))*stride+((side-dw)//2+x)*3
+            data[at:at+3] = bytes(pixel(min(width-1,x*width//dw), min(height-1,y*height//dh)))
+    return struct.pack("<2sIHHI", b"BM", 54+len(data), 0, 0, 54) + struct.pack(
+        "<IiiHHIIiiII", 40, side, side, 1, 24, 0, len(data), 0, 0, 0, 0) + data
+
+
 def device(query):
     def one(key):
         values = query.get(key, [])
@@ -199,6 +246,7 @@ class Store:
     def __init__(self, root):
         self.root = Path(root).resolve()
         self.releases = {}
+        self.icons = {}
         self.lock = threading.RLock()
         self.refresh()
 
@@ -237,8 +285,18 @@ class Store:
         return [{"release": key, "id": info["id"], "name": info["name"],
                  "version": info["version"], "description": info["description"],
                  "bytes": info["total_bytes"], "file_count": len(info["files"]),
-                 "permissions": info["permissions"]}
+                 "permissions": info["permissions"], "icon": self.icon_metadata(key)}
                 for key, info in sorted(newest.values(), key=lambda x: x[1]["id"])]
+
+    def icon(self, key):
+        with self.lock:
+            if key not in self.icons:
+                self.icons[key] = package_icon(self.root/"releases"/key/"payload"/"0")
+            return self.icons[key]
+
+    def icon_metadata(self, key):
+        data = self.icon(key)
+        return {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()} if data else None
 
 
 def handler(store):
@@ -283,7 +341,9 @@ def handler(store):
                     items = store.catalog(dev)
                     return self.reply(200, encode({"schema": 1, "total": len(items),
                         "items": items[page*8:(page+1)*8], "next": page+1 if (page+1)*8 < len(items) else -1}))
-                match = re.fullmatch(r"/v1/releases/([a-f0-9]{64})(?:/files/(\d+))?", url.path)
+                icon_route = url.path.endswith("/icon")
+                route = url.path[:-5] if icon_route else url.path
+                match = re.fullmatch(r"/v1/releases/([a-f0-9]{64})(?:/files/(\d+))?", route)
                 if not match or match[1] not in store.releases:
                     return self.reply(404, encode({"error": "not_found"}))
                 key, index = match.groups()
@@ -291,6 +351,14 @@ def handler(store):
                 reasons = incompatibility(info, dev)
                 if reasons:
                     return self.reply(409, encode({"error": "incompatible", "reasons": reasons}))
+                if icon_route:
+                    if index is not None:
+                        return self.reply(404, encode({"error": "not_found"}))
+                    data = store.icon(key)
+                    if data is None:
+                        return self.reply(404, encode({"error": "no_icon"}))
+                    return self.reply(200, data, "image/bmp", {"ETag": '"'+hashlib.sha256(data).hexdigest()+'"',
+                                      "Cache-Control": "private, max-age=86400"})
                 if index is None:
                     files = info["files"]
                     return self.reply(200, encode({"schema": 1, "release": key,

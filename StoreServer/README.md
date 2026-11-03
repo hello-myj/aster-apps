@@ -1,5 +1,7 @@
 # 本地应用分发服务器
 
+商城图标：目录条目可带 `icon: {bytes, sha256}`，没有图标时为 `null`。`GET /v1/releases/<release>/icon` 按相同设备兼容规则返回 48×48 BMP，并提供 ETag。服务器直接读取已发布 ASTP 中的 ASTI（I1/A8/RGB565/RGB565A8），保留宽高比并将透明部分合成到白色底。缩略图是派生展示数据，不修改已发布包、资源或 release ID，也不计入安装包体积；旧客户端可忽略该字段。整个服务仍仅依赖 Python 标准库。
+
 在 APPS 仓库根目录运行，使用 Python 3.11 或更新版本，无第三方依赖。服务端代码可用于 Windows、Linux、macOS；Windows 和 WSL/Linux 已通过 HTTP 接口测试，macOS 尚未实际验证。
 
 ```sh

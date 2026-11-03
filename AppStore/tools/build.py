@@ -22,6 +22,7 @@ if url.scheme not in ("http", "https") or not url.hostname or url.username or ur
 configured = project / "build/configured"
 configured.mkdir(parents=True, exist_ok=True)
 shutil.copytree(project / "src", configured / "src", dirs_exist_ok=True)
+shutil.copytree(project / "assets", configured / "assets", dirs_exist_ok=True)
 manifest = (project / "app.toml").read_text(encoding="utf-8-sig")
 if a.target == "xtensa":
     manifest = re.sub(r"heap = \d+", "heap = 393216", manifest)
