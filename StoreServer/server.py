@@ -235,7 +235,10 @@ def incompatibility(info, dev):
         reasons.append("aot_target")
     if current[0] != info["abi_min"][0] or current < info["abi_min"]:
         reasons.append("abi")
-    if info["screens"] and [dev["width"], dev["height"]] not in info["screens"]:
+    # The Store's viewport orientation does not change the panel's size.
+    # Installed apps acquire their own portrait/landscape orientation lease.
+    screen = [dev["width"], dev["height"]]
+    if info["screens"] and screen not in info["screens"] and screen[::-1] not in info["screens"]:
         reasons.append("screen")
     if any(not dev["features"] & (1 << FEATURES[f]) for f in info["requires"]):
         reasons.append("capability")

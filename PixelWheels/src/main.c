@@ -29,7 +29,7 @@ static Skid skids[180];static int skidhead;
 static float bonus_cooldown[128];
 static aster_handle_t surface=ASTER_HANDLE_INVALID,loadfile;
 static aster_gfx_t pixels;
-static uint16_t *frame;static int pitch,width,height;
+static uint16_t *frame;static int pitch,width,height,view_height;
 static uint32_t loaded;
 static int phase,selected_map,selected_car=11,dirty=1,auto_gas=1,key_left,key_right,key_gas,key_brake;
 static int demo_drive; static int turbo_charges=1; static int key_action,action_latch,paused,buttons[5],menu_capture=-1,menu_cancel,menu_downx,menu_downy;
@@ -79,6 +79,7 @@ static void copy_pixels(uint16_t *dst,const uint16_t *src,int count){
 }
 static char failure[100];
 enum {LOADING,SELECT,COUNTDOWN,RACE,FINISHED,ERROR};
+#include "ui.h"
 static float absf(float x){return x<0?-x:x;}
 static float clamp(float v,float a,float b){return v<a?a:v>b?b:v;}
 static float sq(float x){return x*x;}
@@ -306,10 +307,10 @@ static void simulate(float dt){
             if(rv<0){if((i==0||j==0)&&rv<-35){pw_audio_event(PW_IMPACT);}a->vx-=rv*.6f*nx;a->vy-=rv*.6f*ny;b->vx+=rv*.6f*nx;b->vy+=rv*.6f*ny;}
         }
     }
-    int action=key_action||buttons[4];if(action&&!action_latch&&turbo_charges>0){racers[0].turbo=1.5f;turbo_charges--;pw_audio_event(PW_TURBO);}action_latch=action;
+    int action=key_action||buttons[4];if(action&&!action_latch&&turbo_charges>0){racers[0].turbo=1.5f;turbo_charges--;pw_audio_event(PW_TURBO);aster_printf("PW TURBO remaining=%d",turbo_charges);}action_latch=action;
 }
 static void tile(int id,int x,int y,int foreground){
-    int x0=x<0?-x:0,y0=y<0?-y:0,x1=x+32>width?width-x:32,y1=y+32>height?height-y:32;
+    int x0=x<0?-x:0,y0=y<0?-y:0,x1=x+32>width?width-x:32,y1=y+32>view_height?view_height-y:32;
     int kind=3;
     if(foreground){TileInfo t=fg_info[id];kind=t.kind;if(!kind)return;if(x0<t.x0)x0=t.x0;if(y0<t.y0)y0=t.y0;if(x1>t.x1)x1=t.x1;if(y1>t.y1)y1=t.y1;}
     if(x0>=x1||y0>=y1)return;
@@ -321,8 +322,8 @@ static void tile(int id,int x,int y,int foreground){
     }
 }
 static void map_layer(int cx,int cy,int foreground){
-    int left=cx-width/2,top=cy-height/2;
-    for(int ty=top/32-1;ty<=(top+height)/32;ty++)for(int tx=left/32-1;tx<=(left+width)/32;tx++){
+    int left=cx-width/2,top=cy-view_height/2;
+    for(int ty=top/32-1;ty<=(top+view_height)/32;ty++)for(int tx=left/32-1;tx<=(left+width)/32;tx++){
         if(tx<0||ty<0||tx>=(int)map->w||ty>=(int)map->h)continue;
         int at=ty*map->w+tx;tile(foreground?fgids[at]:bgids[at],tx*32-left,ty*32-top,foreground);
     }
@@ -337,7 +338,7 @@ static void profile_background(void){
         for(int k=0;k<4;k++){
             uint32_t at=aster_time_now_ms();
             // Exercise both source/destination parities, representative of scrolling.
-            map_layer(width/2+k,height/2+k,0);
+            map_layer(width/2+k,view_height/2+k,0);
             elapsed+=aster_time_now_ms()-at;
         }
         times[mode]=elapsed;if(elapsed<best){best=elapsed;winner=mode;}
@@ -370,27 +371,61 @@ static void overview(int x,int y,int w,int h){
     }
 }
 static void button(int x,int y,int w,int h,const char *name,int down){
-    rect(x,y,w,h,down?0x4e9d:0x10c5,180);line(x,y,x+w-1,y,0x7bd0);line(x,y+h-1,x+w-1,y+h-1,0x4a69);
-    label(x+(w-(int)strlen(name)*6)/2,y+(h-7)/2,name,0xffff,1);
+    uint16_t fill=down?0x349f:0x10c5;int alpha=down?255:180;
+    rect(x,y+4,w,h-8,fill,alpha);
+    for(int row=0;row<4;row++){int inset=row==0?4:row==1?2:1;rect(x+inset,y+row,w-inset*2,1,fill,alpha);rect(x+inset,y+h-1-row,w-inset*2,1,fill,alpha);}
+    line(x+4,y,x+w-5,y,down?0xffff:0x9cd3);line(x+4,y+h-1,x+w-5,y+h-1,0x526f);
+    if(name[0]&&name[1]==0&&(name[0]=='<'||name[0]=='>')){
+        int cx=x+w/2,cy=y+h/2,r=pw_large()?14:10;
+        for(int dy=-r;dy<=r;dy++){int n=r-(dy<0?-dy:dy)+1;int xx=name[0]=='<'?cx-r+(dy<0?-dy:dy):cx;rect(xx,cy+dy,n,1,0xffff,255);}
+        rect(name[0]=='<'?cx:cx-r,cy-2,r,5,0xffff,255);return;
+    }
+    int scale=pw_large()&&h>=38?2:1;if((int)strlen(name)*6*scale>w-8)scale=1;
+    label(x+(w-(int)strlen(name)*6*scale)/2,y+(h-7*scale)/2,name,0xffff,scale);
 }
+static void menu_button(int id,const char *name){PWRect r=pw_menu(id);button(r.x,r.y,r.w,r.h,name,0);}
+static void fit_label(int x,int y,int w,const char *name,int scale){char text[64];unsigned n=0,limit=w/(6*scale);while(name[n]&&n+1<sizeof(text)&&n<limit){text[n]=name[n];n++;}text[n]=0;label(x,y,text,0xffff,scale);}
 static void menu_render(void){
-    rect(0,0,width,height,0x10a3,255);
-    for(int i=0;i<height;i+=8)line(0,i,width-1,i,0x10c4);
-    image(logo_data,LOGO_W,LOGO_H,18,2,1);
-    label(282,28,"ASTER EDITION",0x9f93,1);label(282,44,"9 TRACKS / 15 CARS",0x9cf3,1);
-    rect(16,112,250,148,0x2948,255);overview(20,116,242,140);
-    char b[100];aster_snprintf(b,sizeof(b),"%d/9  %s",selected_map+1,track_defs[selected_map].name);
-    label(20,104,b,0xffff,1);
-    button(18,214,35,40,"<",0);button(228,214,35,40,">",0);
-    rect(282,96,180,164,0x1926,255);
-    label(294,106,"CHOOSE YOUR RIDE",0xaed9,1);
-    sprite_car(selected_car,372,174,-64,3);
-    center(0,"",0,1);
-    const char *name=car_defs[selected_car].name;label(372-(int)strlen(name)*3,232,name,0xffff,1);
-    button(288,154,29,43,"<",0);button(428,154,29,43,">",0);
-    button(156,270,168,38,"START RACE",0);button(374,66,88,24,"DEMO DRIVE",0);
-    label(18,286,"< > TRACK",0x7bef,1);label(350,286,"UP/DOWN CAR",0x7bef,1);
-    center(312,"ENTER START / ESC MENU / SPACE TURBO",0x7bef,1);
+    int big=pw_large(),py=big?174:48,mw=big?246:width-156,mh=big?144:82,cx=big?284:width-136,cw=big?180:128;
+    rect(0,0,width,height,0x10a3,255);for(int i=0;i<height;i+=8)line(0,i,width-1,i,0x10c4);
+    if(big){image(logo_data,LOGO_W,LOGO_H,(width-LOGO_W)/2,12,1);center(124,"CHOOSE TRACK & CAR",0x9f93,2);}
+    else label(8,10,"PIXEL WHEELS",0xffff,2);
+    fit_label(16,big?152:32,mw,track_defs[selected_map].name,big?2:1);fit_label(cx,big?152:32,cw,car_defs[selected_car].name,big?2:1);
+    rect(12,py-4,mw+8,mh+8,0x2948,255);overview(16,py,mw,mh);
+    rect(cx,py-4,cw,mh+8,0x1926,255);sprite_car(selected_car,cx+cw/2,py+mh/2,-64,big?3:2);
+    menu_button(2,"<");menu_button(3,">");menu_button(4,"<");menu_button(5,">");
+    PWRect prev=pw_menu(2),next=pw_menu(3);char text[32];aster_snprintf(text,sizeof(text),"TRACK %d/9",selected_map+1);label((prev.x+prev.w+next.x)/2-(int)strlen(text)*3,big?346:150,text,0x9cf3,1);
+    prev=pw_menu(4);next=pw_menu(5);aster_snprintf(text,sizeof(text),"%d/15",selected_car+1);label((prev.x+prev.w+next.x)/2-(int)strlen(text)*3,big?346:150,text,0x9cf3,1);
+    menu_button(1,"START RACE");menu_button(10,"DEMO");
+    center(height-10,big?"LEFT / RIGHT STEER  -  SPACE TURBO":"AUTO GAS / TAP TURBO",0x7bef,1);
+}
+static void race_hud(int rank){
+    char s[100];int big=pw_large();if(big)rect(0,view_height,width,height-view_height,0x10a3,255);
+    rect(0,0,width,32,0x0862,185);
+    aster_snprintf(s,sizeof(s),"%d/6",rank);label(big?14:8,8,s,0xffe0,big?2:1);
+    aster_snprintf(s,sizeof(s),"LAP %d/3",racers[0].lap>=3?3:racers[0].lap+1);label(big?92:38,10,s,0xffff,1);
+    aster_snprintf(s,sizeof(s),"%u.%us",(uint32_t)race_time,(uint32_t)(race_time*10)%10);label(big?204:96,10,s,0xffff,1);
+    int speed=(int)(root(sq(racers[0].vx)+sq(racers[0].vy))*.36f);aster_snprintf(s,sizeof(s),"%d KM/H",speed);label(big?294:160,10,s,0x9f93,1);
+    menu_button(8,"MENU");menu_button(9,auto_gas?"AUTO GAS":"MANUAL");menu_button(11,"RESET");
+    const char *names[]={"<",">","BRAKE","GAS","TURBO"};
+    for(int i=0;i<5;i++){
+        if(i==3&&!big&&auto_gas)continue;PWRect r=pw_control(i);
+        int on=buttons[i]||(i==0?key_left:i==1?key_right:i==2?key_brake:i==3?key_gas:key_action);
+        button(r.x,r.y,r.w,r.h,names[i],on);if(i==4){aster_snprintf(s,sizeof(s),"%d",turbo_charges);label(r.x+r.w-10,r.y+4,s,0xffe0,1);}
+    }
+    if(demo_drive)label(big?184:156,52,"DEMO",0xffe0,1);
+    int mapw=big?82:62,maph=big?48:36,mx=width-mapw-12,my=43;
+    rect(mx-4,my-4,mapw+8,maph+8,0x0862,150);
+    for(uint32_t j=0;j<map->wayN;j++){Point p=waypoints[j],q=waypoints[(j+1)%map->wayN];line(mx+(int)(p.x*mapw/(map->w*32)),my+(int)(p.y*maph/(map->h*32)),mx+(int)(q.x*mapw/(map->w*32)),my+(int)(q.y*maph/(map->h*32)),0x9cf3);}
+    rect(mx+(int)(racers[0].x*mapw/(map->w*32))-2,my+(int)(racers[0].y*maph/(map->h*32))-2,4,4,0xffe0,255);
+    if(phase==COUNTDOWN){aster_snprintf(s,sizeof(s),"%d",(int)countdown+1);center(view_height/2-18,s,0xffff,5);}
+    else if(phase==RACE&&race_time<.7f)center(view_height/2-22,"GO!",0x87f0,4);
+    if(paused||phase==FINISHED){
+        int bw=big?260:width-64,cy=height/2;rect((width-bw)/2-16,cy-82,bw+32,180,0x0862,235);
+        center(cy-62,phase==FINISHED?"FINISH!":"PAUSED",0xffe0,2);
+        if(phase==FINISHED){aster_snprintf(s,sizeof(s),"TIME %u.%us  PLACE %d/6",(uint32_t)race_time,(uint32_t)(race_time*10)%10,rank);center(cy-34,s,0xffff,1);}
+        menu_button(6,phase==FINISHED?"RACE AGAIN":"RESUME");menu_button(7,"TRACK & CAR SELECT");
+    }
 }
 static void render(void){
     uint32_t draw_at=aster_time_now_ms();
@@ -398,11 +433,11 @@ static void render(void){
     if(rc<0||!b.ptr||b.format!=ASTER_PIXEL_RGB565){fail("Acquire surface",rc<0?rc:ASTER_ENOTSUP);return;}
     frame=(uint16_t*)b.ptr;pitch=b.pitch/2;aster_gfx_init(&pixels,b.ptr,b.width,b.height,b.pitch);
     if(phase==LOADING||phase==ERROR||phase==SELECT||map->w*32<(uint32_t)width||map->h*32<(uint32_t)height)aster_gfx_clear(&pixels,0x10a3);
-    if(phase==LOADING){image(logo_data,LOGO_W,LOGO_H,128,40,1);center(180,"LOADING ORIGINAL TRACK...",0xffff,1);rect(90,208,(int)(loaded*300/MAP_CAP),6,0x87f0,255);}
+    if(phase==LOADING){image(logo_data,LOGO_W,LOGO_H,(width-LOGO_W)/2,pw_large()?40:18,1);center(pw_large()?180:150,"LOADING ORIGINAL TRACK...",0xffff,1);rect(20,height-44,(int)(loaded*(width-40)/MAP_CAP),6,0x87f0,255);}
     else if(phase==ERROR){center(100,"RESOURCE ERROR",0xfaa8,2);center(150,failure,0xffff,1);center(185,"RUN tools/build.ps1 AND USE run-sim.ps1",0xbdf7,1);}
     else if(phase==SELECT){profile_background();menu_render();}
     else{
-        int cx=(int)camera_x,cy=(int)camera_y,ox=width/2-cx,oy=height/2-cy;
+        int cx=(int)camera_x,cy=(int)camera_y,ox=width/2-cx,oy=view_height/2-cy;
         uint32_t part=aster_time_now_ms();
         map_layer(cx,cy,0);perf_bg+=aster_time_now_ms()-part;part=aster_time_now_ms();
         for(int i=0;i<180;i++)if(skids[i].life>0){Skid *s=&skids[i];float dx=cs(s->angle)*7,dy=sn(s->angle)*7;
@@ -417,32 +452,7 @@ static void render(void){
         }
         perf_cars+=aster_time_now_ms()-part;part=aster_time_now_ms();map_layer(cx,cy,1);perf_fg+=aster_time_now_ms()-part;part=aster_time_now_ms();
         char s[100];int rank=1;for(int i=1;i<RACERS;i++)if(racers[i].progress>racers[0].progress)rank++;
-        rect(0,0,width,32,0x0862,185);
-        aster_snprintf(s,sizeof(s),"%d/6",rank);label(14,8,s,0xffe0,2);
-        aster_snprintf(s,sizeof(s),"LAP %d/3",racers[0].lap>=3?3:racers[0].lap+1);label(92,10,s,0xffff,1);
-        aster_snprintf(s,sizeof(s),"%u.%us",(uint32_t)race_time,(uint32_t)(race_time*10)%10);label(204,10,s,0xffff,1);
-        int speed=(int)(root(sq(racers[0].vx)+sq(racers[0].vy))*.36f);
-        aster_snprintf(s,sizeof(s),"%d KM/H",speed);label(294,10,s,0x9f93,1);
-        button(409,3,64,26,"MENU",paused);
-        button(8,height-72,76,64,"<",key_left||buttons[0]);button(94,height-72,76,64,">",key_right||buttons[1]);
-        button(390,height-72,82,64,"BRAKE",key_brake||buttons[2]);
-        if(!auto_gas)button(300,height-72,82,64,"GAS",key_gas||buttons[3]);
-        aster_snprintf(s,sizeof(s),"TURBO x%d",turbo_charges);button(390,height-130,82,48,s,key_action||buttons[4]);button(8,42,92,28,auto_gas?"AUTO GAS":"MANUAL GAS",0);button(108,42,64,28,"RESET",0);
-        if(demo_drive)label(184,52,"DEMO / A TO DRIVE",0xffe0,1);
-        // Tiny route overview, kept out of the steering area.
-        int mx=width-98,my=43;rect(mx-4,my-4,92,58,0x0862,150);
-        for(uint32_t j=0;j<map->wayN;j++){Point p=waypoints[j],q=waypoints[(j+1)%map->wayN];line(mx+(int)(p.x*82/(map->w*32)),my+(int)(p.y*48/(map->h*32)),mx+(int)(q.x*82/(map->w*32)),my+(int)(q.y*48/(map->h*32)),0x9cf3);}
-        rect(mx+(int)(racers[0].x*82/(map->w*32))-2,my+(int)(racers[0].y*48/(map->h*32))-2,4,4,0xffe0,255);
-        if(phase==COUNTDOWN){aster_snprintf(s,sizeof(s),"%d",(int)countdown+1);center(height/2-18,s,0xffff,5);}
-        else if(phase==RACE && race_time<.7f)center(height/2-22,"GO!",0x87f0,4);
-        perf_ui+=aster_time_now_ms()-part;
-        if(paused||phase==FINISHED){
-            rect(96,70,288,176,0x0862,235);center(84,phase==FINISHED?"FINISH!":"PAUSED",0xffe0,3);
-            if(phase==FINISHED){aster_snprintf(s,sizeof(s),"TIME %u.%us  PLACE %d/6",(uint32_t)race_time,(uint32_t)(race_time*10)%10,rank);center(118,s,0xffff,1);}
-            button(126,140,228,30,phase==FINISHED?"RACE AGAIN":"RESUME",0);
-            button(126,177,228,30,"TRACK & CAR SELECT",0);
-            center(220,"ENTER RESUME / ESC SELECT",0x9cf3,1);
-        }
+        race_hud(rank);perf_ui+=aster_time_now_ms()-part;
     }
     uint32_t present_at=aster_time_now_ms();rc=aster_surface_present(surface);perf_present+=aster_time_now_ms()-present_at;if(rc<0){aster_errfmt("present %d",rc);aster_app_exit(rc);return;}dirty=0;
     if(phase==RACE&&!paused){
@@ -456,29 +466,13 @@ static void render(void){
     }
 }
 static int control_at(int x,int y){
-    if(x>=8&&x<84&&y>=height-72&&y<height-8)return 0;
-    if(x>=94&&x<170&&y>=height-72&&y<height-8)return 1;
-    if(x>=390&&x<472&&y>=height-72&&y<height-8)return 2;
-    if(!auto_gas&&x>=300&&x<382&&y>=height-72&&y<height-8)return 3;
-    if(x>=390&&x<472&&y>=height-130&&y<height-82)return 4;
-    return -1;
+    for(int id=0;id<5;id++)if((id!=3||pw_large()||!auto_gas)&&pw_hit(pw_control_touch(id),x,y))return id;return -1;
 }
 static int menu_at(int x,int y){
-    if(phase==SELECT){
-        if(x>=156&&x<324&&y>=270&&y<308)return 1;
-        if(x>=374&&x<462&&y>=66&&y<90)return 10;
-        if(x>=18&&x<53&&y>=214&&y<254)return 2;
-        if(x>=228&&x<263&&y>=214&&y<254)return 3;
-        if(x>=288&&x<317&&y>=154&&y<197)return 4;
-        if(x>=428&&x<457&&y>=154&&y<197)return 5;
-    }else if(paused||phase==FINISHED){
-        if(x>=126&&x<354&&y>=140&&y<170)return 6;
-        if(x>=126&&x<354&&y>=177&&y<207)return 7;
-    }else if(phase==RACE||phase==COUNTDOWN){
-        if(x>=409&&x<473&&y>=3&&y<29)return 8;
-        if(x>=8&&x<100&&y>=42&&y<70)return 9;
-        if(x>=108&&x<172&&y>=42&&y<70)return 11;
-    }return -1;
+    if(phase==SELECT){const int ids[]={1,10,2,3,4,5};for(unsigned i=0;i<sizeof(ids)/sizeof(*ids);i++)if(pw_hit(pw_menu(ids[i]),x,y))return ids[i];}
+    else if(paused||phase==FINISHED){if(pw_hit(pw_menu(6),x,y))return 6;if(pw_hit(pw_menu(7),x,y))return 7;}
+    else if(phase==RACE||phase==COUNTDOWN){const int ids[]={8,9,11};for(int i=0;i<3;i++)if(pw_hit(pw_menu(ids[i]),x,y))return ids[i];}
+    return -1;
 }
 static void choose_map(int delta){selected_map=(selected_map+delta+TRACK_COUNT)%TRACK_COUNT;load_map();}
 static void choose_car(int delta){selected_car=(selected_car+delta+CAR_COUNT)%CAR_COUNT;dirty=1;}
@@ -488,17 +482,18 @@ static void menu_action(int id){
     else if(id==6){if(phase==FINISHED)start_race();else{paused=0;inputs_clear();clock_valid=0;pw_audio_resume();}}
     else if(id==7){audio_end();phase=SELECT;paused=0;inputs_clear();dirty=1;}
     else if(id==8){paused=1;inputs_clear();pw_audio_pause();dirty=1;}
-    else if(id==11){start_race();}
+    else if(id==11){demo_drive=0;start_race();}
     else if(id==10){demo_drive=1;start_race();}
-    else if(id==9){auto_gas=!auto_gas;inputs_clear();dirty=1;}
+    else if(id==9){auto_gas=!auto_gas;dirty=1;}
 }
 static void touch(const aster_event_t *e){
+    int before[5];memcpy(before,buttons,sizeof(before));
     int action=e->u.touch.action,x=e->u.touch.x,y=e->u.touch.y;uint32_t slot=e->u.touch.slot;
     if(phase==LOADING||phase==ERROR)return;
     int i=-1,free=-1;for(int j=0;j<10;j++){if(fingers[j].active&&fingers[j].slot==slot)i=j;if(!fingers[j].active&&free<0)free=j;}
     if(action==ASTER_TOUCH_DOWN){
         if(i<0)i=free;if(i<0)return;
-        fingers[i]=(Finger){slot,1,x,y,-1};int m=menu_at(x,y);
+        int m=menu_at(x,y);fingers[i]=(Finger){slot,1,x,y,m>0?-1:control_at(x,y)};
         if(m>0 && menu_capture<0){menu_capture=m;menu_slot=slot;menu_cancel=0;menu_downx=x;menu_downy=y;}
     }
     if(i<0)return;
@@ -510,8 +505,11 @@ static void touch(const aster_event_t *e){
     }
     memset(buttons,0,sizeof(buttons));
     if(!paused&&(phase==RACE||phase==COUNTDOWN))for(int j=0;j<10;j++)if(fingers[j].active&&!(fingers[j].slot==menu_slot&&menu_capture>0)){
-        int b=control_at(fingers[j].x,fingers[j].y);if(b>=0)buttons[b]=1;
+        int origin=fingers[j].button,b=control_at(fingers[j].x,fingers[j].y);
+        if(origin==4)buttons[4]=1;
+        else if(origin>=0&&b>=0&&((origin<=1&&b<=1)||(origin>=2&&origin<=3&&b>=2&&b<=3)))buttons[b]=1;
     }
+    if(memcmp(before,buttons,sizeof(before)))aster_printf("PW INPUT left=%d right=%d brake=%d gas=%d turbo=%d",buttons[0],buttons[1],buttons[2],buttons[3],buttons[4]);
     dirty=1;
 }
 static void key(const aster_event_t *e){
@@ -527,16 +525,15 @@ static void key(const aster_event_t *e){
 }
 ASTER_APP_EXPORT int aster_app_init(void){
     aster_display_info_t d={.size=sizeof(d),.version=1};int rc=aster_display_get_info(0,&d,sizeof(d));if(rc<0)return rc;
-    if(d.app_width<480||d.app_height<320)return ASTER_ENOTSUP;
-    /* Keep game coordinates stable; Host fits this canvas and maps touch. */
-    width=480;height=320;
-    aster_surface_desc_t desc={.size=sizeof(desc),.version=1,.width=width,.height=height,.format=ASTER_PIXEL_RGB565,.flags=ASTER_SURFACE_F_SCALE_FIT};
+    if(d.app_width<320||d.app_height<240)return ASTER_ENOTSUP;
+    width=d.app_width;height=d.app_height;view_height=height>=400?height-120:height;auto_gas=!pw_large();
+    aster_surface_desc_t desc={.size=sizeof(desc),.version=1,.width=width,.height=height,.format=ASTER_PIXEL_RGB565};
     rc=aster_surface_create(&desc,sizeof(desc),&surface);if(rc<0)return rc;
     rc=read_small("cars.bin",car_data,sizeof(car_data));if(rc<0){fail("Load cars",rc);return 0;}
     rc=read_small("title.bin",logo_data,sizeof(logo_data));if(rc<0){fail("Load title",rc);return 0;}
     rc=read_small("bonus.bin",bonus_data,sizeof(bonus_data));if(rc<0){fail("Load bonus",rc);return 0;}
     rc=aster_app_set_framerate(30);if(rc<0)return rc;
-    load_map();aster_printf("PixelWheels init: 9 original tracks, 15 cars, map_cap=%u",(uint32_t)MAP_CAP);return ASTER_OK;
+    load_map();aster_printf("PW layout screen=%dx%d world=%dx%d auto=%d",width,height,width,view_height,auto_gas);aster_printf("PixelWheels init: 9 original tracks, 15 cars, map_cap=%u",(uint32_t)MAP_CAP);return ASTER_OK;
 }
 ASTER_APP_EXPORT void aster_app_event(const aster_event_t *e){
     if(!e||surface==ASTER_HANDLE_INVALID)return;
@@ -550,7 +547,7 @@ ASTER_APP_EXPORT void aster_app_event(const aster_event_t *e){
             uint32_t sim_at=aster_time_now_ms();accum+=dt;int steps=0;while(accum>=1.0f/60&&steps<6){simulate(1.0f/60);accum-=1.0f/60;steps++;}
             float tx=racers[0].x+cs(racers[0].angle)*45,ty=racers[0].y+sn(racers[0].angle)*45;
             camera_x+=(tx-camera_x)*clamp(dt*7,0,1);camera_y+=(ty-camera_y)*clamp(dt*7,0,1);
-            camera_x=clamp(camera_x,width*.5f,map->w*32-width*.5f);camera_y=clamp(camera_y,height*.5f,map->h*32-height*.5f);perf_sim+=aster_time_now_ms()-sim_at;
+            camera_x=clamp(camera_x,width*.5f,map->w*32-width*.5f);camera_y=clamp(camera_y,view_height*.5f,map->h*32-view_height*.5f);perf_sim+=aster_time_now_ms()-sim_at;
             dirty=1;
         }
         uint32_t audio_at=aster_time_now_ms();audio_tick(now);perf_audio+=aster_time_now_ms()-audio_at;

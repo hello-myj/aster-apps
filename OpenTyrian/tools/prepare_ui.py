@@ -22,12 +22,28 @@ for size in (16,12,10):
     font=ImageFont.truetype(str(FONT),size)
     lines.append('{')
     for ch in chars:
-        im=Image.new('L',(16,16));d=ImageDraw.Draw(im);bbox=font.getbbox(ch)
+        im=Image.new('L',(16,16));d=ImageDraw.Draw(im);bbox=font.getbbox("国")
         d.text((0,-bbox[1]),ch,font=font,fill=255)
         rows=[sum((1<<x) for x in range(size) if im.getpixel((x,y))>=100) for y in range(size)]
         lines.append('{'+','.join(str(x) for x in rows)+'},')
     lines.append('},')
 lines.append('};')
+# Two-bit coverage at the final 1.5x output size, not a scaled 1-bit mask.
+lines.append('static const unsigned char zh_native_sizes[]={24,18,15};')
+for index,size in enumerate((24,18,15)):
+    stride=(size*size+3)//4
+    lines.append('static const unsigned char zh_native_'+str(index)+'['+str(len(chars))+']['+str(stride)+']={')
+    font=ImageFont.truetype(str(FONT),size*2)
+    for ch in chars:
+        im=Image.new('L',(size*2,size*2));d=ImageDraw.Draw(im);bbox=font.getbbox("国")
+        d.text((0,-bbox[1]),ch,font=font,fill=255)
+        im=im.resize((size,size),Image.Resampling.LANCZOS)
+        values=[(im.getpixel((x,y))*3+127)//255 for y in range(size) for x in range(size)]
+        packed=[sum(values[j+k]<<(2*k) for k in range(min(4,len(values)-j))) for j in range(0,len(values),4)]
+        lines.append('{'+','.join(map(str,packed))+'},')
+    lines.append('};')
+lines.append('static const unsigned char *const zh_native_bits[]={&zh_native_0[0][0],&zh_native_1[0][0],&zh_native_2[0][0]};')
+lines.append('static const unsigned short zh_native_stride[]={144,81,57};')
 lines.append('static const struct {const char *en,*zh;} zh_dictionary[]={')
 for en,zh in mapping.items():
     key=''.join(c.lower() for c in en if c not in '~ \t\r\n')
@@ -40,7 +56,7 @@ for filename in ('font.c','fonthand.c'):
     source='#include "localization.h"\n'+source
     if filename=='font.c':
         injections={
-          'drawFontHv':'if(tyrian_zh_draw(surface,x,y,text,font,hue,value,0))return;',
+          'drawFontHv':'if(value==-10 && tyrian_zh_width(text,font)>=0)return; if(tyrian_zh_draw(surface,x,y,text,font,hue,value,0))return;',
           'drawFontHvBlend':'if(tyrian_zh_draw(surface,x,y,text,font,hue,value,0))return;',
           'drawFontDark':'if(tyrian_zh_draw(surface,x,y,text,font,0,0,1))return;'}
     else:

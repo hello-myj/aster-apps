@@ -29,7 +29,7 @@ typedef struct {float x,y,w,scale;} Projected;
 typedef struct {Projected a,b,c,d;float clip;uint32_t line;bool valid;} View;
 typedef struct {float z,offset,speed,target;uint8_t model,side;uint32_t passed;} Traffic;
 typedef struct {
- float position,x,speed,threshold,remaining,lap,countdown,crash,skid,score,bg_offset;
+ float position,x,speed,threshold,remaining,lap,countdown,crash,skid,score,bg_offset,steer_scale;
  uint32_t frames,steps,errors,collisions,gear,stage,branch,map_id,body_frame,anim,route_choice;
  int steer,touch_steer,prev_steer,elevation;bool brake,touch_brake,gas,touch_gas,auto_gas,paused,offroad,menu_open;
  int menu_choice;

@@ -1,7 +1,8 @@
 /* GPL-3.0-or-later. External SD data and bounded RGB565 image cache. */
 #include "engine.h"
 Map map;Image font;uint32_t cache_bytes,cache_peak,asset_errors;
-static Image cache[80];static uint16_t cached_slot[2048];static uint32_t age;
+static Image cache[80];static uint16_t cached_slot[2048];static uint32_t age,cache_limit=1350000;
+static void evict(int slot);
 /* OPK1: seekable SD archive. Header/index only live in RAM; pixels remain LRU. */
 static bool bundle_checked,bundle_available;
 static uint32_t image_entries[2048][2],map_entries[16][2],bundle_images,bundle_total,bundle_version,font_entry[2];
@@ -49,6 +50,9 @@ int load_map(uint32_t id){
  aster_handle_t f;uint32_t available;int r=resource_open(path,&f,&available);if(r<0)return r;
  Map next={0};uint8_t *parts[5];uint32_t sizes[5];r=aster_fs_read(f,&next.h,sizeof(next.h));
  if(r!=sizeof(next.h)||next.h.magic!=0x3252544f||next.h.count>20000||next.h.metas>512||next.h.objects>100000){aster_fs_close(f);return ASTER_EIO;}
+ /* A course transition temporarily retains both maps. Release disposable
+  * sprites first so the transaction can fit the same bounded guest heap. */
+ for(int i=0;i<80;i++)evict(i);
  next.line=malloc(next.h.count*sizeof(RoadLine));next.meta=malloc(next.h.metas*sizeof(ObjectMeta));next.obj=malloc(next.h.objects*sizeof(Placement));next.first=calloc(next.h.count+1,4);
  if(!next.line||!next.meta||!next.obj||!next.first){free(next.line);free(next.meta);free(next.obj);free(next.first);aster_fs_close(f);return ASTER_ENOMEM;}
  parts[0]=(uint8_t*)next.colors;parts[1]=(uint8_t*)next.line;parts[2]=(uint8_t*)next.meta;parts[3]=(uint8_t*)next.obj;
@@ -57,12 +61,16 @@ int load_map(uint32_t id){
  aster_fs_close(f);
  for(uint32_t i=0;i<next.h.objects;i++){if(next.obj[i].line>=next.h.count||next.obj[i].object>=next.h.metas){r=ASTER_EIO;goto release;}next.first[next.obj[i].line+1]++;}
  for(uint32_t i=1;i<=next.h.count;i++)next.first[i]+=next.first[i-1];
- free_map();map=next;aster_logf(ASTER_LOG_INFO,"MAP %u lines=%u objects=%u exact relief loaded",id,map.h.count,map.h.objects);return 0;
+ free_map();map=next;
+ uint32_t fixed=next.h.count*sizeof(RoadLine)+next.h.metas*sizeof(ObjectMeta)+next.h.objects*sizeof(Placement)+(next.h.count+1)*4+screen_w*screen_h*2+font.bytes+131072;
+ cache_limit=MIN(1350000u,2097152u>fixed?2097152u-fixed:0);
+ aster_logf(ASTER_LOG_INFO,"MAP %u lines=%u objects=%u cache_limit=%u exact relief loaded",id,map.h.count,map.h.objects,cache_limit);return 0;
 bad:aster_fs_close(f);
 release:free(next.line);free(next.meta);free(next.obj);free(next.first);return r<0?r:ASTER_EIO;
 }
 static void evict(int slot){if(cache[slot].pixel){if(cache[slot].id<2048)cached_slot[cache[slot].id]=0;cache_bytes-=cache[slot].bytes;free(cache[slot].pixel);}memset(&cache[slot],0,sizeof(Image));}
 static int oldest(void){int o=0;for(int i=0;i<80;i++){if(!cache[i].pixel)return i;if(cache[i].last<cache[o].last)o=i;}return o;}
+static int oldest_loaded(void){int o=-1;for(int i=0;i<80;i++)if(cache[i].pixel&&(o<0||cache[i].last<cache[o].last))o=i;return o;}
 Image *get_image(uint32_t id){
  age++;if(id>=2048){asset_errors++;return 0;}int found=(int)cached_slot[id]-1;
  if(found>=0){cache[found].last=age;profile.hits++;return &cache[found];}
@@ -73,8 +81,12 @@ Image *get_image(uint32_t id){
  uint16_t header[4];if(aster_fs_read(f,header,8)!=8){aster_fs_close(f);asset_errors++;return 0;}bool alpha=header[0]&0x8000;header[0]&=0x7fff;if(!header[0]||!header[1]||header[0]>2048||header[1]>1024){aster_fs_close(f);asset_errors++;return 0;}
  uint32_t bytes=header[0]*header[1]*(alpha?3:2);if(bytes>1350000||bytes+8>available){aster_fs_close(f);asset_errors++;return 0;}
  uint32_t allocated=((bytes+3)&~3u)+header[1]*4;
- while(cache_bytes+allocated>1350000){int o=-1;for(int i=0;i<80;i++)if(cache[i].pixel&&(o<0||cache[i].last<cache[o].last))o=i;if(o<0)break;evict(o);}
- uint16_t *data=malloc(allocated);if(!data){aster_fs_close(f);asset_errors++;return 0;}
+ while(cache_bytes+allocated>cache_limit){int o=oldest_loaded();if(o<0)break;evict(o);}
+ /* The surface and larger courses share this heap. The cache byte ceiling
+  * alone cannot account for those allocations or allocator fragmentation. */
+ uint16_t *data=malloc(allocated);
+ while(!data&&cache_bytes){int o=oldest_loaded();if(o<0)break;evict(o);data=malloc(allocated);}
+ if(!data){aster_fs_close(f);asset_errors++;return 0;}
  uint32_t done=0;while(done<bytes){int r=aster_fs_read(f,(uint8_t*)data+done,bytes-done);if(r<=0){free(data);aster_fs_close(f);asset_errors++;return 0;}done+=r;}aster_fs_close(f);
  uint8_t *alpha_plane=alpha?(uint8_t*)(data+header[0]*header[1]):0;
  uint16_t *left=(uint16_t*)((uint8_t*)data+((bytes+3)&~3u)),*right=left+header[1];

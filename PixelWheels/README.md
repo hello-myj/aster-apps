@@ -1,8 +1,21 @@
-# Pixel Wheels → Aster：移植版 0.1.6
+# Pixel Wheels → Aster：移植版 0.2.1
+
+0.2.0 同时提供 P4（480×480 / RISC-V AOT）与 lckfb（320×240 / Xtensa AOT）商城版本。画布使用硬件原生分辨率，菜单、选图、选车和暂停页随屏幕布局；不使用 IMU 或方向盘。
+
+- P4：上方 480×360 游戏区，下方独立操作区；左侧左右转向按钮，右侧油门/刹车，中间 TURBO。默认手动油门。
+- lckfb：320×240 全屏游戏，左下小型左右转向按钮，右侧刹车与 TURBO；默认自动油门，切换 MANUAL 后显示 GAS。
+- 每个触点独立跟踪，支持转向与油门/刹车同时操作；转向区可滑动切换方向。TURBO 每次按下只消耗一次，暂停及系统切出清除按键状态。
+- 运行 `node tests/mobile-flow.cjs` 可验证两种屏幕上的 9 张地图、15 辆车、双指操作、TURBO 和暂停恢复。测试使用便携 WASM，硬件部署使用对应架构 AOT。
+
+P4 商城资源位于 `dist/resources/resources`；lckfb 资源位于 `dist/lckfb-resources/resources`，通过 `store.toml` 与各架构安装包一起发布，安装后均由 `/assets/resources` 读取。`python tools/prepare_lckfb_assets.py` 生成 lckfb 专用音频：16 kHz 单声道完整音乐、滤波后的发动机采样；地图和车辆资源不变。通用商城构建脚本选择 Xtensa 时会自动生成此资源集。旧版手工 SD 部署说明仅供历史版本参考。
+
+2026-11-06 已在 P4 和 lckfb 安装并通过 AOT 启动 0.2.0，P4 用户确认正常。lckfb 实机验证了左右滑动切换、转向与 TURBO 双指组合、松手清除及 MENU 暂停恢复，截图和串口日志位于 `artifacts/`。lckfb 原版首图实测约 10–12 FPS（绘制目标为 30 FPS）。用户反馈小按键不易命中、持续沙沙声；临时停止全部音效而保留音乐后，用户确认噪声消失。0.2.1 因此扩大 lckfb 转向按钮至 58×56、命中区至每侧 80×96，并扩大其余操作区；专用音频降低混音负担并过滤发动机采样。P4 保留原布局和音频资源。
+
+lckfb 0.2.1 已实机安装，确认以 16 kHz 输出并启用游戏音效，首图驾驶段约 14–15 FPS；用户确认按键与声音恢复正常。测试期间截图会暂停应用，现已停止自动截图和触摸注入。用户曾反馈间歇卡住或触摸失效、之后反馈恢复正常；本次未复现独立的持续故障，不把短时恢复当作长期稳定性验收。
 
 当前商城版本的 P4 构建、资源路径和发布步骤见 [商城应用构建](../docs/market-apps.zh-CN.md)。旧版手工 SD 部署说明不适用于新的 `/assets` 资源布局。
 
-基于 Aurélien Gâteau / agateau/pixelwheels 的原图、原 TMX 地图和车辆定义实现 C/WASM 运行层。480×320 横屏，在官方 Aster 模拟器中运行，保留未来 Xtensa AOT 构建路径。一个项目对应此完整文件夹。
+基于 Aurélien Gâteau / agateau/pixelwheels 的原图、原 TMX 地图和车辆定义实现 C/WASM 运行层。一个项目对应此完整文件夹。
 
 ## 运行
 
@@ -19,7 +32,7 @@
 - 选车：上下方向键或车辆两侧箭头。
 - Enter / START RACE 开始；A / DEMO DRIVE 演示驾驶，驾驶时 A 切换自动驾驶。
 - 方向键左右转向，上 / Ctrl 加速，下 / Alt 制动，低速继续制动可倒车。
-- 默认自动油门，可点 AUTO GAS 切换手动；手动时显示 GAS。
+- lckfb 默认自动油门，P4 默认手动；点 AUTO/MANUAL 切换，手动时显示 GAS。
 - 空格 / TURBO 消耗一个加速道具，初始一个，拾取原地图礼盒可补充，最多三个。
 - Esc / MENU 暂停；菜单 RESUME 继续，TRACK & CAR SELECT 返回选图选车。
 - R / RESET 重置当前比赛；暂停时也可按 R。

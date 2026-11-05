@@ -2,6 +2,7 @@
  * A small SDL service adapter, not a second implementation of game rules. */
 #include "tyrian_port.h"
 #include <aster_gfx_engine.h>
+#include "../../common/p4_gamepad.h"
 #include <SDL.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -12,18 +13,10 @@
 static SDL_Event queue[128];static unsigned front,back;
 static uint8_t physical[256],state[SDL_NUM_SCANCODES];
 static int text_active;
-static struct {uint32_t slot;int active,bits,joystick;} contacts[10];
+static struct {uint32_t slot;int active,bits,joystick,mask;} contacts[10];
 static int joy_x,joy_y;
 static uint32_t repeat_at;
-static unsigned isqrt(unsigned n){unsigned x=0,bit=1u<<30;while(bit>n)bit>>=2;while(bit){if(n>=x+bit){n-=x+bit;x=(x>>1)+bit;}else x>>=1;bit>>=2;}return x;}
-static int joystick_bits(int x,int y){
- int dx=x-82,dy=y-244;unsigned r=isqrt(dx*dx+dy*dy);joy_x=dx;joy_y=dy;if(r>40){joy_x=dx*40/(int)r;joy_y=dy*40/(int)r;}
- if(r<14)return 0;
- int ax=abs(dx),ay=abs(dy),bits=0;
- if(ax*100>=ay*42)bits|=dx<0?1:2;
- if(ay*100>=ax*42)bits|=dy<0?4:8;
- return bits;
-}
+static int joystick_bits(int x,int y){pad_stick_position(x,y,&joy_x,&joy_y);return pad_direction(x,y);}
 static SDL_Scancode from_evdev(unsigned c){
  switch(c){case 1:return SDL_SCANCODE_ESCAPE;case 14:return SDL_SCANCODE_BACKSPACE;case 15:return SDL_SCANCODE_TAB;case 28:return SDL_SCANCODE_RETURN;case 29:return SDL_SCANCODE_LCTRL;case 42:return SDL_SCANCODE_LSHIFT;case 54:return SDL_SCANCODE_RSHIFT;case 56:return SDL_SCANCODE_LALT;case 57:return SDL_SCANCODE_SPACE;case 103:return SDL_SCANCODE_UP;case 105:return SDL_SCANCODE_LEFT;case 106:return SDL_SCANCODE_RIGHT;case 108:return SDL_SCANCODE_DOWN;case 111:return SDL_SCANCODE_DELETE;}
  static const int ev[]={30,48,46,32,18,33,34,35,23,36,37,38,50,49,24,25,16,19,31,20,22,47,17,45,21,44};
@@ -44,12 +37,12 @@ static void key_event(SDL_Scancode s,int on){
 }
 static int touch_bits(unsigned x,unsigned y){
  int b=0;
- if(x>=384&&x<474&&y>=252&&y<314)b|=16;
- if(x>=384&&x<474&&y>=202&&y<246)b|=32;
- if(x>=284&&x<326&&y>=264&&y<314)b|=64;
- if(x>=334&&x<376&&y>=264&&y<314)b|=128;
- if(x>=418&&x<474&&y>=8&&y<40)b|=256;
- if(x>=350&&x<410&&y>=8&&y<40)b|=512;
+ if(pad_circle(x,y,404,422,43))b|=16;
+ if(pad_box(x,y,194,350,112,44))b|=32;
+ if(pad_circle(x,y,224,438,28))b|=64;
+ if(pad_circle(x,y,290,438,28))b|=128;
+ if(pad_box(x,y,388,6,84,28))b|=256;
+ if(pad_box(x,y,302,6,78,28))b|=512;
  return b;
 }
 static void rebuild(void){
@@ -69,12 +62,13 @@ void tyrian_input(const aster_event_t *ev){
   int slot=-1;for(unsigned i=0;i<10;i++)if(contacts[i].active&&contacts[i].slot==ev->u.touch.slot)slot=i;
   if(slot<0&&ev->u.touch.action==ASTER_TOUCH_DOWN)for(unsigned i=0;i<10;i++)if(!contacts[i].active){slot=i;contacts[i].slot=ev->u.touch.slot;break;}
   if(slot>=0){
-   aster_display_info_t info={.size=sizeof(info),.version=1};
-   if(aster_display_get_info(0,&info,sizeof(info))==0&&info.app_width&&info.app_height){
-    int x=(int)ev->u.touch.x*480/(int)info.app_width,y=(int)ev->u.touch.y*320/(int)info.app_height;
-    if(ev->u.touch.action==ASTER_TOUCH_DOWN){int dx=x-82,dy=y-244,owned=0;for(unsigned j=0;j<10;j++)if(contacts[j].active&&contacts[j].joystick)owned=1;contacts[slot].joystick=!owned&&dx*dx+dy*dy<=74*74;}
-    contacts[slot].bits=contacts[slot].joystick?joystick_bits(x,y):touch_bits(x,y);
+   int x=ev->u.touch.x,y=ev->u.touch.y;
+   if(ev->u.touch.action==ASTER_TOUCH_DOWN){
+    int owned=0;for(unsigned j=0;j<10;j++)if(j!=(unsigned)slot&&contacts[j].active&&contacts[j].joystick)owned=1;
+    contacts[slot].joystick=!owned&&pad_circle(x,y,PAD_X,PAD_Y,62);
+    contacts[slot].mask=touch_bits(x,y);
    }
+   contacts[slot].bits=contacts[slot].joystick?joystick_bits(x,y):(touch_bits(x,y)&contacts[slot].mask);
    contacts[slot].active=ev->u.touch.action!=ASTER_TOUCH_UP;
    if(!contacts[slot].active&&contacts[slot].joystick){joy_x=joy_y=0;contacts[slot].joystick=0;}
   }
@@ -127,20 +121,19 @@ void SDL_LogError(int cat,const char *fmt,...){(void)cat;va_list ap;va_start(ap,
 void SDL_LogSetPriority(int cat,SDL_LogPriority priority){(void)cat;(void)priority;}
 void SDL_LogGetOutputFunction(SDL_LogOutputFunction *cb,void **userdata){if(cb)*cb=NULL;if(userdata)*userdata=NULL;}
 int SDL_ShowSimpleMessageBox(Uint32 f,const char *title,const char *message,SDL_Window *win){(void)f;(void)win;aster_printf("%s: %s",title,message);return 0;}
-static uint16_t shade(uint16_t v,int pressed){unsigned r=v>>11,g=(v>>5)&63,b=v&31;return ((r*3/4)<<11)|((g*3/4)<<5)|(b*3/4)+(pressed?3:0);}
-static void button(uint16_t *p,unsigned pitch,aster_gfx_t *g,int x,int y,int w,int h,const char *label,int pressed){for(int yy=y;yy<y+h;yy++)for(int xx=x;xx<x+w;xx++)p[yy*pitch+xx]=shade(p[yy*pitch+xx],pressed);aster_gfx_frame_rect(g,x,y,w,h,pressed?0xffff:0x7bef);tyrian_zh_rgb(p,pitch,x+(w-(int)strlen(label)/3*16)/2,y+(h-16)/2,label,0xffff);}
-static void joystick_draw(uint16_t *p,unsigned pitch){
- for(int y=-64;y<=64;y++)for(int x=-64;x<=64;x++){int d=x*x+y*y;if(d>64*64)continue;uint16_t *v=&p[(244+y)*pitch+82+x];if(d>=62*62||((x*x+y*y>=13*13)&&(x*x+y*y<=14*14)))*v=0x9cd3;else *v=shade(*v,0);}
- int active=0;for(unsigned i=0;i<10;i++)if(contacts[i].active&&contacts[i].joystick)active=1;
- int dx=joy_x,dy=joy_y;if(!active){dx=(state[SDL_SCANCODE_RIGHT]-state[SDL_SCANCODE_LEFT])*26;dy=(state[SDL_SCANCODE_DOWN]-state[SDL_SCANCODE_UP])*26;}
- for(int y=-20;y<=20;y++)for(int x=-20;x<=20;x++){int d=x*x+y*y;if(d>400)continue;uint16_t *v=&p[(244+dy+y)*pitch+82+dx+x];if(d>=18*18)*v=active?0xffff:0xbdf7;else *v=shade(*v,active);}
-}
 void tyrian_overlay(uint16_t *pixels,unsigned pitch,unsigned w,unsigned h){
- if(w!=480||h!=320)return;aster_gfx_t g;aster_gfx_init(&g,pixels,w,h,pitch*2);
- joystick_draw(pixels,pitch);
- button(pixels,pitch,&g,384,252,90,62,"射击",state[SDL_SCANCODE_SPACE]);
- button(pixels,pitch,&g,384,202,90,44,"确认",state[SDL_SCANCODE_RETURN]);
- button(pixels,pitch,&g,284,264,42,50,"左翼",state[SDL_SCANCODE_LCTRL]);button(pixels,pitch,&g,334,264,42,50,"右翼",state[SDL_SCANCODE_LALT]);
- button(pixels,pitch,&g,418,8,56,32,"返回",state[SDL_SCANCODE_ESCAPE]);button(pixels,pitch,&g,350,8,60,32,"暂停",state[SDL_SCANCODE_P]);
+ if(w!=PAD_W||h!=PAD_H)return;aster_gfx_t g;aster_gfx_init(&g,pixels,w,h,pitch*2);
+ int active=0;for(unsigned i=0;i<10;i++)if(contacts[i].active&&contacts[i].joystick)active=1;
+ int dx=active?joy_x:(state[SDL_SCANCODE_RIGHT]-state[SDL_SCANCODE_LEFT])*22;
+ int dy=active?joy_y:(state[SDL_SCANCODE_DOWN]-state[SDL_SCANCODE_UP])*22;
+ pad_base(&g,"OPENTYRIAN",0x34fd);pad_stick(&g,dx,dy,active,0x34fd);
+ pad_top_button(&g,302,78,"PAUSE",state[SDL_SCANCODE_P],0x34fd);
+ pad_top_button(&g,388,84,"BACK",state[SDL_SCANCODE_ESCAPE],0xc32a);
+ pad_action(&g,404,422,39,"FIRE",NULL,state[SDL_SCANCODE_SPACE],0xfd0a);
+ pad_action(&g,224,438,24,"L",NULL,state[SDL_SCANCODE_LCTRL],0x3d5f);
+ pad_action(&g,290,438,24,"R",NULL,state[SDL_SCANCODE_LALT],0x3d5f);
+ pad_round(&g,194,350,112,44,10,state[SDL_SCANCODE_RETURN]?0x34fd:0x2948);
+ tyrian_zh_rgb(pixels,pitch,234,364,"确认",0xffff);
+ tyrian_zh_rgb(pixels,pitch,388,438,"射击",0xffff);
+ pad_center(&g,257,402,"SIDEKICKS",1,0x9cd3);
 }
-

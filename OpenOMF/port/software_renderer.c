@@ -2,6 +2,7 @@
 /* Software implementation of upstream shaders/palette.frag and rgba.frag.
  * Uses the upstream renderer vtable; combat and all scene rendering stay upstream. */
 #include <aster_imports.h>
+#include "../../common/p4_gamepad.h"
 #include "video/renderers/renderer.h"
 #include "video/video.h"
 #include "video/vga_state.h"
@@ -30,8 +31,14 @@ static int bound(int x,int a,int b){return x<a?a:x>b?b:x;}
 static bool available(void){return true;}static const char *name(void){return "AsterSoftware";}static const char *description(void){return "Aster paletted software renderer";}
 static void create(renderer *r){r->ctx=frame;}
 static void destroy(renderer *r){}
-static bool setup(void *ctx,int w,int h,bool fs,bool vs,int aspect,int limit,int scale,int scaling){if(screen!=ASTER_HANDLE_INVALID)return true;aster_surface_desc_t d={.size=sizeof(d),.version=1,.width=480,.height=320,.format=ASTER_PIXEL_RGB565,.flags=ASTER_SURFACE_F_SCALE_FIT};return aster_surface_create(&d,sizeof(d),&screen)>=0;}
-static void state(void *ctx,int *w,int *h,bool *fs,bool *vs,int *aspect,int *scale){if(w)*w=480;if(h)*h=320;if(fs)*fs=false;if(vs)*vs=false;if(aspect)*aspect=0;if(scale)*scale=1;}
+static bool setup(void *ctx,int w,int h,bool fs,bool vs,int aspect,int limit,int scale,int scaling){
+ if(screen!=ASTER_HANDLE_INVALID)return true;
+ aster_display_info_t info={.size=sizeof(info),.version=1};
+ if(aster_display_get_info(0,&info,sizeof(info))<0||info.app_width!=PAD_W||info.app_height!=PAD_H)return false;
+ aster_surface_desc_t d={.size=sizeof(d),.version=1,.width=PAD_W,.height=PAD_H,.format=ASTER_PIXEL_RGB565};
+ return aster_surface_create(&d,sizeof(d),&screen)>=0;
+}
+static void state(void *ctx,int *w,int *h,bool *fs,bool *vs,int *aspect,int *scale){if(w)*w=480;if(h)*h=PAD_H;if(fs)*fs=false;if(vs)*vs=false;if(aspect)*aspect=0;if(scale)*scale=1;}
 static void reset(void *ctx){omf_renderer_drop_cache();}
 static void close_context(void *ctx){omf_renderer_drop_cache();if(screen!=ASTER_HANDLE_INVALID){aster_surface_destroy(screen);screen=ASTER_HANDLE_INVALID;}}
 static void move(void *ctx,int x,int y){targetX=x;targetY=y;}
@@ -67,10 +74,10 @@ static inline __attribute__((always_inline)) uint16_t color(Pixel p){if(!(p.word
 static unsigned pf_count,pf_convert,pf_overlay,pf_present;
 static void finish(void *ctx){uint32_t stamp=aster_time_now_ms();sync_palette();aster_surface_buffer_t b={.size=sizeof(b),.version=1};if(aster_surface_acquire(screen,&b,sizeof(b))<0)return;uint16_t *dst=b.ptr;unsigned pitch=b.pitch/2;/* Only the letterbox bars need clearing. Write adjacent RGB565 pixels as
  * aligned 32-bit words: 16-bit PSRAM writes cost much more on ESP32-S3. */
-memset(dst,0,b.pitch*10);memset(dst+310*pitch,0,b.pitch*10);
+/* Header and control deck are painted by the overlay. */
 for(int y=0;y<300;y++){
- uint32_t *row=(uint32_t *)(dst+(y+10)*pitch);
- if(y&&y*2/3==(y-1)*2/3){const uint32_t *prev=(const uint32_t *)(dst+(y+9)*pitch);for(unsigned k=0;k<240;k++)row[k]=prev[k];continue;}
+ uint32_t *row=(uint32_t *)(dst+(y+PAD_GAME_Y)*pitch);
+ if(y&&y*2/3==(y-1)*2/3){const uint32_t *prev=(const uint32_t *)(dst+(y+PAD_GAME_Y-1)*pitch);for(unsigned k=0;k<240;k++)row[k]=prev[k];continue;}
  Pixel *src=&frame[(y*2/3)*320];
  for(int x=0;x<320;x+=4){uint32_t a=color(src[x]),b=color(src[x+1]),c=color(src[x+2]),d=color(src[x+3]);int dx=x*3/4;row[dx]=a|(a<<16);row[dx+1]=b|(c<<16);row[dx+2]=c|(d<<16);}
 }

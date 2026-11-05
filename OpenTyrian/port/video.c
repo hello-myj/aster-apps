@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "tyrian_port.h"
+#include "../../common/p4_gamepad.h"
 #include "video.h"
+#include "localization.h"
 #include "video_scale.h"
 #include "palette.h"
 #include <stdlib.h>
@@ -26,13 +28,9 @@ int tyrian_video_init(void){
  aster_display_info_t info={.size=sizeof(info),.version=1};
  int rc=aster_display_get_info(0,&info,sizeof(info));if(rc<0)return rc;
  width=info.app_width;height=info.app_height;
- if(width<320||height<200||width>1024||height>768)return ASTER_ENOTSUP;
- /* Game controls use a landscape canvas. Host letterboxes on square panels. */
- if(width==480&&height==480)height=320;
- view_w=width;view_h=view_w*200/320;
- if(view_h>height){view_h=height;view_w=view_h*320/200;}
- left=(width-view_w)/2;top=(height-view_h)/2;
- aster_surface_desc_t desc={.size=sizeof(desc),.version=1,.width=width,.height=height,.format=ASTER_PIXEL_RGB565,.flags=ASTER_SURFACE_F_SCALE_FIT};
+ if(width!=PAD_W||height!=PAD_H)return ASTER_ENOTSUP;
+ view_w=480;view_h=300;left=0;top=PAD_GAME_Y;
+ aster_surface_desc_t desc={.size=sizeof(desc),.version=1,.width=width,.height=height,.format=ASTER_PIXEL_RGB565};
  return aster_surface_create(&desc,sizeof(desc),&surface);
 }
 void init_video(void){
@@ -59,12 +57,13 @@ int tyrian_video_present(void){
  aster_surface_buffer_t b={.size=sizeof(b),.version=1};int rc=aster_surface_acquire(surface,&b,sizeof(b));
  if(rc<0)return rc;if(!b.ptr||b.format!=ASTER_PIXEL_RGB565)return ASTER_ENOTSUP;
  uint16_t *out=b.ptr;unsigned pitch=b.pitch/2;
- for(unsigned y=0;y<height;y++)memset(out+y*pitch,0,width*2);
+ /* The game, header and control deck together repaint the entire surface. */
  unsigned xmap[1024];for(unsigned x=0;x<view_w;x++)xmap[x]=x*320/view_w;
  for(unsigned y=0;y<view_h;y++){
   const uint8_t *src=pending+(y*200/view_h)*320;uint16_t *dst=out+(top+y)*pitch+left;
   for(unsigned x=0;x<view_w;x++)dst[x]=pending_palette[src[xmap[x]]];
  }
+ tyrian_zh_present(out,pitch,pending,pending_palette);
  tyrian_overlay(out,pitch,width,height);
  rc=aster_surface_present(surface);if(rc<0)return rc;dirty=0;return 1;
 }

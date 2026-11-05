@@ -16,7 +16,7 @@ for(const project of projects){let host;
   const dir=path.join(root,project),files=fs.readdirSync(path.join(dir,'build/sim/dist/riscv')).filter(x=>x.endsWith('.ast'));
   assert.equal(files.length,1);
   const pkg=loadPackage(path.join(dir,'build/sim/dist/riscv',files[0]));
-  assets(path.join(dir,project==='GoldMiner'?'dist/riscv/resources':'dist/resources'),'',pkg.assets);
+  assets(path.join(dir,project==='GoldMiner'?'dist/riscv/resources':project==='OutRun'?'dist/store-resources':'dist/resources'),'',pkg.assets);
   let clock=0;host=new Host(pkg,{width:480,height:480,clock:()=>clock});host.start();
   for(let frame=0;frame<240;frame++){clock+=33;host.tick();if(host.exitCode!==null)break;}
   const diag=host.diagnostics();assert.equal(diag.trap,null,JSON.stringify(host.logs));

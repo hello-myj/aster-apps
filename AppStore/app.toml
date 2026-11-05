@@ -2,7 +2,7 @@
 id = "aster.store"
 name = "Aster 商城"
 description = "按设备兼容性浏览、下载和安装应用及资源。"
-version = "0.1.2"
+version = "0.1.7"
 orientation = "landscape"
 icon = "assets/icon.bin"
 abi = "4.3.0"

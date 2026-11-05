@@ -124,3 +124,20 @@ void sha_hex(store_sha256 *s,char output[65])
     const char hex[]="0123456789abcdef";
     for(unsigned i=0;i<32;i++){unsigned value=(s->h[i/4]>>(24-8*(i%4)))&255;output[2*i]=hex[value>>4];output[2*i+1]=hex[value&15];}output[64]=0;
 }
+
+static int version_parts(const char *s,unsigned parts[3])
+{
+    if(!s)return -1;
+    for(unsigned i=0;i<3;i++){
+        if(*s<'0'||*s>'9')return -1;
+        unsigned n=0;do{n=n*10+(unsigned)(*s++-'0');if(n>255)return -1;}while(*s>='0'&&*s<='9');parts[i]=n;
+        if(!*s){if(!i)return -1;if(i==1)parts[2]=0;return 0;}
+        if(*s++!='.'||i==2)return -1;
+    }
+    return -1;
+}
+int store_version_compare(const char *a,const char *b,int *order)
+{
+    unsigned av[3],bv[3];if(!order||version_parts(a,av)||version_parts(b,bv))return -1;
+    *order=0;for(unsigned i=0;i<3;i++)if(av[i]!=bv[i]){*order=av[i]>bv[i]?1:-1;break;}return 0;
+}

@@ -18,7 +18,7 @@ static void traffic_reset(void){
 }
 void game_reset_map(uint32_t id){
  id=CLAMP(id,1,15);audio_end();beep_second=-1;clear_input();memset(&game,0,sizeof(game));
- game.map_id=id;game.stage=1;game.position=300*SEGMENT;game.auto_gas=true;game.body_frame=1;game.countdown=3;
+ game.map_id=id;game.stage=1;game.position=300*SEGMENT;game.auto_gas=false;game.body_frame=1;game.countdown=3;
  if(load_map(id)<0){game.state=-1;return;}
  game.remaining=id==1?160:map.h.time;
  while(game.stage<5&&id>game.stage*(game.stage+1)/2)game.stage++;
@@ -71,7 +71,7 @@ void game_update(float dt){
    if(game.gear==0&&game.speed>=100&&!game.offroad)game.gear=1;
   }else {game.speed=MAX(0,game.speed-(100.f/6.5f)*.75f*dt);if(game.speed<100)game.gear=0;}
   /* Same threshold convergence and easing as source accelerationControl. */
-  float threshold=game.speed*dt;
+  float threshold=game.speed*dt*(game.steer_scale>0?game.steer_scale:1.f);
   if(game.steer<0){if(game.threshold>-threshold)game.threshold-=.3f;else if(game.threshold<-threshold)game.threshold+=.3f;}
   else if(game.steer>0){if(game.threshold<threshold)game.threshold+=.3f;else if(game.threshold>threshold)game.threshold-=.3f;}
   else {game.threshold-=game.threshold*.1f;if(fabsf(game.threshold)<.1f)game.threshold=0;}

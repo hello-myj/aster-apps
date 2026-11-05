@@ -47,7 +47,7 @@ OutRun、Pixel Wheels 的只读资源从 `/data/resources` 迁到 `/assets/resou
 
 GoldMiner 的 `game.gma` 和音频从 AST 拆为外部文件，保持应用内 `/assets/assets/...` 路径；图标仍在 AST 内。TouchTest 不需要独立资源。
 
-Pixel Wheels、OpenOMF、OpenTyrian 保持 480×320 逻辑画布，显式启用 `ASTER_SURFACE_F_SCALE_FIT`；P4 固件在 480×480 屏幕上等比居中显示、清空留白并映射触摸。未设置此标志的小画布只更新左上区域，会留下旧内容，不等于自动适配。
+Pixel Wheels 保持 480×320 逻辑画布，显式启用 `ASTER_SURFACE_F_SCALE_FIT`。OpenOMF 0.3.1、OpenTyrian 0.2.1 使用原生 480×480 RGB565 画布，中间为 480×300 原比例游戏视口，顶部工具栏、底部独立摇杆与动作键区；不再使用中间画布缩放。两款游戏只发布当前 P4 的 RISC-V AOT 与方屏模拟器变体，不向 lckfb 提供。
 
 GoldMiner 0.2.0 取消底部虚拟按键，保留右上角透明 MENU。lckfb 用 320×240 原尺寸与 Xtensa AOT；P4 用 RISC-V AOT，将游戏等比放大为 480×360 居中。点击游戏放钩、点击炸药图标使用、达标后点击目标金额跳关、点击商品购买、点击店主继续。主指抬手确认，拖动、多指与留白不触发游戏操作。
 

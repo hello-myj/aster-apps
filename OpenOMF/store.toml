@@ -13,4 +13,4 @@ target = "wasm"
 package = "build/sim/dist/riscv/aster.openomf.ast"
 resources = "dist/resources"
 boards = ["aster.simulator"]
-screens = [[480, 480], [480, 320]]
+screens = [[480, 480]]

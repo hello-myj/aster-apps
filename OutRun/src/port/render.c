@@ -6,7 +6,8 @@
 #include "engine.h"
 #include "catalog.h"
 #include "ui.h"
-uint16_t *pixels;uint32_t screen_w,screen_h,stride;View views[DRAW_DISTANCE];
+#include "aster_gfx.h"
+uint16_t *pixels;uint32_t screen_w,screen_h,stride;View views[DRAW_DISTANCE];static uint32_t view_h;
 /* Exact /255 blend: red and blue use independent 16-bit lanes, no rounding change. */
 static uint16_t mix(uint16_t a,uint16_t b,int alpha){
  uint32_t inv=255-alpha,pa=(a&31u)|((uint32_t)(a&0xf800u)<<5),pb=(b&31u)|((uint32_t)(b&0xf800u)<<5);
@@ -81,7 +82,7 @@ void text_at(int x,int y,const char *s,uint16_t color,int scale){
 }
 static Projected project(float world_x,float world_y,float z,float cam_x,float cam_y){
  float s=CAMERA_D/MAX(.1f,z);Projected p={screen_w*.5f+screen_w*.5f*(world_x-cam_x)*s,
- screen_h*.5f-screen_h*.5f*(world_y-cam_y)*s, s*ROAD_W*screen_w*.5f,s};return p;
+ view_h*.5f-view_h*.5f*(world_y-cam_y)*s, s*ROAD_W*screen_w*.5f,s};return p;
 }
 /* Paint visible road colour intervals once; nested higher layers exclude lower layers. */
 static void span(uint16_t *row,int x0,int x1,uint16_t c){
@@ -94,8 +95,8 @@ static void except_spans(uint16_t *row,int x0,int x1,int a,int b,int c,int d,uin
  span(row,x0,x1,color);
 }
 static void road_layers(View *v,int light,int off){
- float ya=v->a.y+off,yb=v->b.y+off;if(ya<=yb||ya<0||yb>=screen_h)return;
- int lo=MAX(0,(int)ceilf(yb)),hi=MIN((int)screen_h,(int)ceilf(ya));float inv=1.f/(ya-yb);
+ float ya=v->a.y+off,yb=v->b.y+off;if(ya<=yb||ya<0||yb>=view_h)return;
+ int lo=MAX(0,(int)ceilf(yb)),hi=MIN((int)view_h,(int)ceilf(ya));float inv=1.f/(ya-yb);
  const float limits[][2]={{-1.142857f,1.142857f},{-1,1},{-.944444f,.944444f},{-.351852f,.351852f},{-.296296f,.296296f}};
  uint16_t colors[]={map.colors[light?5:6],map.colors[light?9:10],map.colors[light?3:4],map.colors[light?7:8],map.colors[light?3:4]};
  for(int y=lo;y<hi;y++){
@@ -109,7 +110,7 @@ static void road_layers(View *v,int light,int off){
   span(row,l[4][0],r[4][0],colors[4]);span(row,l[4][1],r[4][1],colors[4]);
  }
 }static void background(int horizon){
- int h=(int)(253.f*screen_h/691.f);
+ int h=(int)(253.f*view_h/691.f);
  for(int layer=0;layer<2;layer++){
   Image *im=get_image(game.map_id?bg_ids[game.map_id-1][layer]:goal_bg_ids[layer]);if(!im)continue;int w=im->ow*screen_w/921;int shift=(int)((1000+game.bg_offset*(layer?1.25f:1.f))*screen_w/921.f)%w;
   if(shift<0)shift+=w;blit(im,-shift,horizon-h,w,h,horizon,255);blit(im,w-shift,horizon-h,w,h,horizon,255);
@@ -125,7 +126,7 @@ static void scenery(View *v,Placement *o,int off){
  }
  Projected p=o->side?v->c:v->a;if(p.scale<=0)return;
  float x=p.x+o->x*p.scale*ROAD_W*screen_w*.5f;
- float y=p.y+o->y*p.scale*1000.f*screen_h*.5f;
+ float y=p.y+o->y*p.scale*1000.f*view_h*.5f;
  float basis=p.scale*screen_w*.5f*((.3f/170.f)*ROAD_W)*meta->scale;
  float dw=image_size[aid][0]*basis*3.2f,dh=image_size[aid][1]*basis*3.43f;
  if(dw<1||dh<1)return;
@@ -144,81 +145,107 @@ static void traffic_draw(View *v,Traffic *car,int off){
  float basis=scale*screen_w*.5f*((.3f/170.f)*ROAD_W)*traffic_scale[car->model%TRAFFIC_MODELS];
  int dw=image_size[id][0]*basis*3.2f,dh=image_size[id][1]*basis*3.43f;
  int bx=(int)x-dw/2,by=(int)y+off-dh;
- if(dw<1||dh<1||bx>=(int)screen_w||bx+dw<=0||by>=MIN((int)v->clip+off,(int)screen_h)||by+dh<=0)return;
+ if(dw<1||dh<1||bx>=(int)screen_w||bx+dw<=0||by>=MIN((int)v->clip+off,(int)view_h)||by+dh<=0)return;
  Image *im=get_image(id);if(!im)return;
  blit(im,bx,by,dw,dh,(int)v->clip+off,255);
 }
 static void player_draw(void){
  if(game.crash>0&&game.crash_phase==2&&game.steps%12<6)return;int frame=game.body_frame;Image *im=get_image(player_ids[CLAMP(frame-1,0,147)]);if(!im)return;
- int w=im->ow*3.2f*screen_w/921.f,h=im->oh*3.2f*screen_h/691.f;
- int x=(screen_w-w)/2,y=screen_h*.84f-h*.25f;
+ int w=im->ow*3.2f*screen_w/921.f,h=im->oh*3.2f*view_h/691.f;
+ int x=(screen_w-w)/2,y=view_h*.84f-h*.25f;
  if(game.offroad&&game.speed>0)y+=(game.steps/5)%2?-1:0;
- blit(im,x,y,w,h,screen_h,255);
+ blit(im,x,y,w,h,view_h,255);
  if((game.brake||game.offroad||map.h.road_terrain>0||game.crash>0||game.speed<45)&&game.speed>0){
   int code=(game.offroad||map.h.road_terrain>0)?4+(CLAMP(game.offroad?map.h.terrain:map.h.road_terrain,1,4)-1)*6+(game.steps/3)%6:(game.steps/3)%4;
   Image *smoke=get_image(wheel_ids[code]);if(smoke){
    int sw=smoke->ow*2.5f*screen_w/921.f,sh=smoke->oh*2.5f*screen_w/921.f;
-   blit(smoke,screen_w/2-(int)(sw*1.2f),y+h-sh,sw,sh,screen_h,255);
-   blit(smoke,screen_w/1.9f,y+h-sh,sw,sh,screen_h,255);
+   blit(smoke,screen_w/2-(int)(sw*1.2f),y+h-sh,sw,sh,view_h,255);
+   blit(smoke,screen_w/1.9f,y+h-sh,sw,sh,view_h,255);
   }
  }
 }
-static void hud_image(int id,int x,int y,int w){
- Image *im=get_image(id);if(im)blit(im,x,y,w,(int)((float)w*im->oh/im->ow),screen_h,255);
+static void tiny_text(aster_gfx_t *g,int x,int y,const char *text,unsigned scale,uint16_t color){
+ for(;*text;text++,x+=6*(int)scale){unsigned c=(unsigned char)*text;if(c<32||c>126)c='?';const uint8_t *glyph=aster_font5x7[c-32];
+  for(unsigned yy=0;yy<7;yy++)for(unsigned xx=0;xx<5;xx++)if(glyph[yy]&(1u<<(4-xx)))aster_gfx_fill_rect(g,x+xx*scale,y+yy*scale,scale,scale,color);}
+}
+static void rounded(aster_gfx_t *g,int x,int y,int w,int h,int r,uint16_t color){
+ aster_gfx_fill_rect(g,x+r,y,w-2*r,h,color);aster_gfx_fill_rect(g,x,y+r,w,h-2*r,color);
+ aster_gfx_disk(g,x+r,y+r,r,color);aster_gfx_disk(g,x+w-r-1,y+r,r,color);aster_gfx_disk(g,x+r,y+h-r-1,r,color);aster_gfx_disk(g,x+w-r-1,y+h-r-1,r,color);
 }
 static void ui_button(int id,const char *label,bool active){
- UiRect r=ui_rect(id);blend_rect(r.x,r.y,r.w,r.h,active?0x3186:0x0841,active?155:90);
- rect(r.x,r.y,r.w,1,0x8410);rect(r.x,r.y+r.h-1,r.w,1,0x8410);
- if(id==UI_LEFT||id==UI_RIGHT)text_at(r.x+(r.w-16)/2,r.y+r.h-32,label,0xffff,2);
- else {int ty=(id==UI_BRAKE||id==UI_GAS)?r.y+r.h-20:r.y+(r.h-16)/2;
-  text_at(r.x+(r.w-(int)strlen(label)*8)/2,ty,label,0xffff,1);
- }
+ UiRect r=ui_rect(id);aster_gfx_t g;aster_gfx_init(&g,pixels,screen_w,screen_h,stride*2);
+ bool pressed=outrun_control_held(id);uint16_t accent=id==UI_AUTO?0x3d5f:0x349f;
+ rounded(&g,r.x,r.y,r.w,r.h,6,pressed?0xffff:active?accent:0x526f);
+ rounded(&g,r.x+2,r.y+2,r.w-4,r.h-4,4,pressed?accent:0x2127);
+ unsigned scale=ui_large()&&id!=UI_MENU&&id!=UI_AUTO?2:1;
+ tiny_text(&g,r.x+(r.w-(int)strlen(label)*6*(int)scale)/2,r.y+(r.h-7*(int)scale)/2,label,scale,0xffff);
+}
+static void pedal(aster_gfx_t *g,int id,const char *name,bool down,uint16_t accent){
+ UiRect r=ui_rect(id);
+ if(ui_large()){rounded(g,r.x,r.y,r.w,r.h,7,down?0xffff:0x9cd3);rounded(g,r.x+2,r.y+2,r.w-4,r.h-4,5,down?accent:0x2127);}
+ else {blend_rect(r.x,r.y,r.w,r.h,down?accent:0x10c4,down?210:125);
+  uint16_t edge=down?0xffff:0x9cd3;aster_gfx_line(g,r.x+3,r.y,r.x+r.w-4,r.y,edge);aster_gfx_line(g,r.x+3,r.y+r.h-1,r.x+r.w-4,r.y+r.h-1,edge);
+  aster_gfx_line(g,r.x,r.y+3,r.x,r.y+r.h-4,edge);aster_gfx_line(g,r.x+r.w-1,r.y+3,r.x+r.w-1,r.y+r.h-4,edge);}
+ for(int y=r.y+10;y<r.y+r.h-21;y+=8)aster_gfx_fill_rect(g,r.x+8,y,r.w-16,3,down?0xffff:0x738e);
+ tiny_text(g,r.x+(r.w-(int)strlen(name)*6)/2,r.y+r.h-13,name,1,0xffff);
+}
+static void wheel(aster_gfx_t *g){
+ int x=ui_wheel_x(),y=ui_wheel_y(),r=ui_wheel_radius(),delta=outrun_wheel_offset();
+ if(!delta&&game.steer)delta=game.steer*r*3/4;
+ int step=CLAMP((delta<0?-delta:delta)*3/(r*3/4),0,3);const int sine[]={0,265,512,724},cosine[]={1024,989,887,724};
+ int sn=sine[step]*(delta<0?-1:1),cs=cosine[step];bool down=game.steer||outrun_control_held(UI_WHEEL);
+ aster_gfx_disk(g,x,y,r+2,down?0x5d9e:0x526f);aster_gfx_disk(g,x,y,r-2,0x10c4);
+ aster_gfx_disk(g,x,y,r-8,0x2948);aster_gfx_disk(g,x,y,r-12,0x10c4);
+ const int vx[]={0,-7,7},vy[]={-9,6,6};
+ for(int i=0;i<3;i++){int px=r*vx[i]/12,py=r*vy[i]/12;int xx=x+(px*cs-py*sn)/1024,yy=y+(px*sn+py*cs)/1024;
+  for(int d=-1;d<=1;d++)aster_gfx_line(g,x+d,y,xx+d,yy,down?0xdfff:0x9cd3);}
+ aster_gfx_disk(g,x,y,r/5,down?0x5d9e:0x526f);tiny_text(g,x-9,y-3,"RUN",1,0xffff);
+ aster_gfx_disk(g,x+(r-5)*sn/1024,y-(r-5)*cs/1024,3,0xfd20);
 }
 static void hud(void){
- char b[80];int sx=screen_w,sy=screen_h;
- hud_image(HUD_TIME_INDICATOR,12,10,40);aster_snprintf(b,sizeof(b),"%03u",(unsigned)MAX(0,game.remaining));text_at(58,8,b,0xffe0,1);
- hud_image(HUD_SCORE_INDICATOR,sx*31/100,10,42);aster_snprintf(b,sizeof(b),"%08u",(unsigned)game.score);text_at(sx*42/100,8,b,0xffff,1);
- hud_image(HUD_LAP_INDICATOR,sx*70/100,10,34);aster_snprintf(b,sizeof(b),"%02u'%02u",(unsigned)game.lap/60,(unsigned)game.lap%60);text_at(sx*80/100,8,b,0xffff,1);
- hud_image(HUD_SPEED_INDICATOR,12,sy-46,34);aster_snprintf(b,sizeof(b),"%03u",(unsigned)(game.speed*1.65f));text_at(51,sy-52,b,0xffe0,2);
- hud_image(HUD_GEAR_INDICATOR,sx-104,sy-58,44);text_at(sx-45,sy-62,game.gear?"H":"L",0xffe0,1);
- aster_snprintf(b,sizeof(b),"STAGE %u",game.stage);text_at(sx-103,sy-82,b,0xffff,1);
- if(game.state!=0){ui_button(UI_MENU,"MENU",game.menu_open);
-  if(game.state==1||game.state==2){
-   ui_button(UI_LEFT,"<",game.steer<0);ui_button(UI_RIGHT,">",game.steer>0);
-   ui_button(UI_BRAKE,"BRAKE",game.brake);ui_button(UI_AUTO,game.auto_gas?"AUTO GAS":"MANUAL",false);
-   if(!game.auto_gas)ui_button(UI_GAS,"GAS",game.gas||game.touch_gas);
-  }
+ char b[80];int sx=screen_w,sy=screen_h,cy=ui_play_height()/2;aster_gfx_t g;aster_gfx_init(&g,pixels,screen_w,screen_h,stride*2);
+ if(ui_large())rect(0,view_h,sx,sy-view_h,0x10c4);
+ blend_rect(0,0,sx,39,0x0841,210);
+ tiny_text(&g,8,6,"TIME",1,0x9cd3);aster_snprintf(b,sizeof(b),"%03u",(unsigned)MAX(0,game.remaining));tiny_text(&g,8,20,b,2,0xffe0);
+ tiny_text(&g,64,6,"SCORE",1,0x9cd3);aster_snprintf(b,sizeof(b),"%08u",(unsigned)game.score);tiny_text(&g,64,24,b,1,0xffff);
+ if(ui_large()||!outrun_motion_available()){tiny_text(&g,128,6,"STAGE",1,0x9cd3);aster_snprintf(b,sizeof(b),"%u",game.stage);tiny_text(&g,128,24,b,1,0xffff);}
+ if(game.state==1||game.state==2){
+  if(!outrun_motion_enabled())wheel(&g);
+  if(ui_large()){pedal(&g,UI_BRAKE,"BRAKE",game.brake,0xc946);pedal(&g,UI_GAS,"GAS",game.gas||game.auto_gas,0x254a);}
+  int x=ui_large()?156:sx/2-38,y=ui_large()?sy-83:48;
+  if(!ui_large())blend_rect(x-4,y-4,88,26,0x10c4,155);
+  if(ui_large())tiny_text(&g,x,y,"SPEED",1,0x9cd3);
+  aster_snprintf(b,sizeof(b),"%03u",(unsigned)(game.speed*1.65f));tiny_text(&g,x,y+(ui_large()?13:0),b,2,0xffff);tiny_text(&g,x+42,y+(ui_large()?21:8),"KM/H",1,0x9cd3);
+  if(ui_large())tiny_text(&g,x,y+36,game.gear?"GEAR H":"GEAR L",1,0x9cd3);
+  if(!ui_large()&&outrun_motion_available())ui_button(UI_MODE,outrun_motion_enabled()?"TILT":"TOUCH",outrun_motion_enabled());
+  if(outrun_motion_enabled())ui_button(UI_CENTER,"CENTER",false);
  }
+ if(game.state!=0)ui_button(UI_MENU,"MENU",game.menu_open);
+ if(game.state==1||game.state==2)ui_button(UI_AUTO,game.auto_gas?"AUTO ON":"AUTO OFF",game.auto_gas);
  if(game.state==0){
-  text_at(sx/2-56,62,"OUT RUN",0xffe0,2);
-  ui_button(UI_PREV,"<",false);ui_button(UI_NEXT,">",false);
-  aster_snprintf(b,sizeof(b),"CIRCUIT %02u",game.map_id);text_at(sx/2-40,128,b,0xffff,1);
-  ui_button(UI_START,"START RACE",false);
- }else if(game.state==1){
-  aster_snprintf(b,sizeof(b),"READY  %u",(unsigned)ceilf(game.countdown));text_at(sx/2-32,sy/2-24,b,0xffe0,1);
- }else if(game.state==3||game.state==4){
-  blend_rect(sx/2-148,112,296,132,0x0001,170);
-  text_at(sx/2-36,132,game.state==3?"TIME OVER":"GOAL!",0xffe0,1);
-  ui_button(UI_START,"RETRY RACE",false);
- }else if(game.crash>0)text_at(sx/2-20,sy/2-40,"CRASH",0xf800,1);
+  blend_rect(sx/2-(ui_large()?156:124),cy-82,ui_large()?312:248,164,0x0841,190);
+  tiny_text(&g,sx/2-42,cy-70,"OUT RUN",2,0xffe0);ui_button(UI_PREV,"<",false);ui_button(UI_NEXT,">",false);
+  aster_snprintf(b,sizeof(b),"CIRCUIT %02u",game.map_id);tiny_text(&g,sx/2-30,cy-20,b,1,0xffff);ui_button(UI_START,"START RACE",false);
+  if(ui_large())tiny_text(&g,sx/2-48,ui_play_height()-20,"HOLD GAS + STEER",1,0x9cd3);
+  else {blend_rect(0,sy-38,sx,38,0x0841,180);tiny_text(&g,sx/2-42,sy-34,outrun_motion_enabled()?"TILT TO STEER":"DRAG THE WHEEL",1,0x9cd3);tiny_text(&g,sx/2-66,sy-18,"LEFT BRAKE / RIGHT GAS",1,0x9cd3);}
+ }else if(game.state==1){aster_snprintf(b,sizeof(b),"READY %u",(unsigned)ceilf(game.countdown));tiny_text(&g,sx/2-42,cy-14,b,2,0xffe0);}
+ else if(game.state==3||game.state==4){blend_rect(sx/2-124,cy-60,248,140,0x0841,210);tiny_text(&g,sx/2-54,cy-38,game.state==3?"TIME OVER":"GOAL!",2,0xffe0);ui_button(UI_START,"RETRY RACE",false);}
+ else if(game.crash>0)tiny_text(&g,sx/2-30,cy-36,"CRASH",2,0xf800);
  if(game.menu_open){
-  blend_rect(0,0,sx,sy,0,145);rect(sx/2-148,56,296,232,0x1082);
-  text_at(sx/2-32,65,"MENU",0xffe0,2);
-  ui_button(UI_RESUME,"RESUME",game.menu_choice==0);
-  ui_button(UI_RESTART,"RESTART",game.menu_choice==1);
-  ui_button(UI_MAPS,"SELECT MAP",game.menu_choice==2);
- }else if(game.paused){blend_rect(0,0,sx,sy,0,120);text_at(sx/2-24,sy/2,"PAUSED",0xffff,1);}
-
+  blend_rect(0,0,sx,sy,0,170);rounded(&g,sx/2-(ui_large()?152:124),sy/2-112,ui_large()?304:248,216,10,0x10c4);
+  tiny_text(&g,sx/2-36,sy/2-96,"PAUSED",2,0xffe0);
+  ui_button(UI_RESUME,"RESUME",game.menu_choice==0);ui_button(UI_RESTART,"RESTART",game.menu_choice==1);ui_button(UI_MAPS,"SELECT MAP",game.menu_choice==2);
+ }else if(game.paused){blend_rect(0,0,sx,sy,0,120);tiny_text(&g,sx/2-36,sy/2,"PAUSED",2,0xffff);}
 }
 void draw_frame(void){
- if(!pixels)return;
- if(!map.line){rect(0,0,screen_w,screen_h,0x0841);text_at(16,60,"OUTRUN RESOURCES MISSING",0xffff,1);text_at(16,90,"COPY SDCARD DIRECTORY FIRST",0xffe0,1);return;}
+ if(!pixels)return;view_h=(uint32_t)ui_play_height();
+ if(!map.line){rect(0,0,screen_w,view_h,0x0841);text_at(16,60,"OUTRUN RESOURCES MISSING",0xffff,1);text_at(16,90,"COPY SDCARD DIRECTORY FIRST",0xffe0,1);return;}
  uint32_t measured=aster_time_now_ms();
- rect(0,0,screen_w,screen_h,map.colors[0]);
- int base=(int)(game.position/SEGMENT)%map.h.count,off=(int)(130.f*screen_h/691.f);
+ rect(0,0,screen_w,view_h,map.colors[0]);
+ int base=(int)(game.position/SEGMENT)%map.h.count,off=(int)(130.f*view_h/691.f);
  float playerz=game.position+PLAYER_Z;uint32_t pi=(uint32_t)(playerz/SEGMENT)%map.h.count;RoadLine *pl=&map.line[pi];
  float frac=fmodf(playerz,SEGMENT)/SEGMENT,cy=800.f+pl->y0+(pl->y1-pl->y0)*frac;
- float percent=fmodf(game.position,SEGMENT)/SEGMENT,dx=-map.line[base].curve*percent,sum=0,maxY=screen_h;
+ float percent=fmodf(game.position,SEGMENT)/SEGMENT,dx=-map.line[base].curve*percent,sum=0,maxY=view_h;
  for(int n=0;n<DRAW_DISTANCE;n++){
   uint32_t index=(base+n)%map.h.count;RoadLine *l=&map.line[index];View *v=&views[n];v->line=index;v->clip=maxY;v->valid=false;
   float z=(base+n)*SEGMENT-game.position;
@@ -229,12 +256,12 @@ void draw_frame(void){
   sum+=dx;dx+=l->curve;
   if(z<=CAMERA_D||v->b.y>=maxY)continue;
   v->valid=true;int light=(index/3)%2;
-  int y0=MAX(0,(int)(v->b.y+off)),y1=MIN((int)screen_h,(int)(v->a.y+off));
+  int y0=MAX(0,(int)(v->b.y+off)),y1=MIN((int)view_h,(int)(v->a.y+off));
   if(y1>y0)rect(0,y0,screen_w,y1-y0,map.colors[light?1:2]);
   road_layers(v,light,off);maxY=v->b.y;
  }
  profile.road+=(uint32_t)(aster_time_now_ms()-measured);measured=aster_time_now_ms();
- background(CLAMP((int)maxY+off,0,(int)screen_h));
+ background(CLAMP((int)maxY+off,0,(int)view_h));
  profile.bg+=(uint32_t)(aster_time_now_ms()-measured);measured=aster_time_now_ms();
  for(int n=DRAW_DISTANCE-1;n>=0;n--){
   View *v=&views[n];float ahead=(base+n)*SEGMENT-game.position;if(ahead<PLAYER_Z-SEGMENT)continue;

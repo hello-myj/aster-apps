@@ -8,7 +8,7 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urlencode
 from http.server import ThreadingHTTPServer
-from .server import publish, Store, handler, relative, package_icon
+from .server import publish, Store, handler, relative, package_icon, incompatibility
 
 
 def package(path, target=2, version="1.0.0", icon=None):
@@ -85,6 +85,14 @@ class ServerTest(unittest.TestCase):
                 self.assertEqual(json.load(r)["items"], [])
             with self.get(f"/v1/releases/{self.key}/files/0", dev) as r:
                 self.assertEqual(r.status, 409)
+
+    def test_rotated_viewport_keeps_hardware_compatibility(self):
+        info = json.loads((self.data / "releases" / self.key / "release.json").read_text())
+        info["screens"] = [[320, 240]]
+        portrait = self.dev | {"width": 240, "height": 320}
+        self.assertEqual(incompatibility(info, portrait), [])
+        self.assertIn("screen", incompatibility(info, portrait | {"height": 480}))
+        self.assertIn("aot_target", incompatibility(info, portrait | {"target": "xtensa"}))
 
     def test_range_head_and_integrity(self):
         path = f"/v1/releases/{self.key}/files/1"

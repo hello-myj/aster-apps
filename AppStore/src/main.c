@@ -7,16 +7,17 @@
 #endif
 #define PAGE 8
 #define PART (8u*1024u*1024u)
-typedef struct {char id[64],name[96],release[65],version[24],description[384],permissions[160],icon_sha[65];uint32_t bytes,count,icon_bytes,icon_handle;int icon_state;} entry;
+typedef struct {char id[64],name[96],release[65],version[24],description[384],permissions[160],icon_sha[65],installed_version[24];int installed,install_state;uint32_t bytes,count,icon_bytes,icon_handle;int icon_state;} entry;
 typedef struct {char path[96],sha[65];uint32_t index,bytes;int package;} artifact;
 static entry entries[PAGE];static artifact files[PAGE];
+static uint32_t catalog_total;static int catalog_ready,catalog_tail;
 static int entry_count,selected,catalog_page,list_offset,catalog_next=-1,manifest_page,file_count,file_at,manifest_next=-1;
 static aster_system_info_t device;
 static aster_handle_t surface,output;
 static aster_ge_t ge;static aster_gfx_cmd_t commands[128];static uint8_t arena[4096];
 static char server[192]=STORE_URL,edit[192],target[16],query[256],url[1024],headers[160];
 static char body[16384],status_line[128],stage[64],cleanup[64],local_file[160];
-static uint8_t buffer[2048];static json_doc doc;
+static uint8_t buffer[8192];static unsigned buffered;static json_doc doc;
 static int request,closing,active,wanted,view,dirty=1,header_checked,icon_at;
 static uint32_t body_len,chunk_start,chunk_end,chunk_received,file_received,total_received,total_files,completed_files,last_draw;
 static store_sha256 checksum;
@@ -32,15 +33,35 @@ static int hex64(const char *s){if(strlen(s)!=64)return 0;for(unsigned i=0;i<64;
 static int next_page(void)
 {uint32_t n;if(!number(0,"next",&n))return n<=10000?(int)n:-2;int k=json_key(&doc,0,"next");return k>=0 && doc.tokens[k].end-doc.tokens[k].start==2 && !memcmp(body+doc.tokens[k].start,"-1",2)?-1:-2;}
 static void draw(void);
+static int visible(void);
 static int network_busy(void){return request && !closing && active!=ICON;}
 static void release_icons(void)
 {for(int i=0;i<entry_count;i++)if(entries[i].icon_handle){aster_gfx_bmp_free(entries[i].icon_handle);entries[i].icon_handle=0;}}
-static int is_installed(const entry *e)
+enum { APP_MISSING,APP_UPDATE,APP_CURRENT,APP_NEWER,APP_UNKNOWN };
+static void installed_snapshot(void)
 {
-    int count=aster_appmgr_count();
-    for(int i=0;i<count && i<32;i++){aster_app_info_t info={.size=sizeof(info),.version=2};if(!aster_appmgr_list(i,&info,sizeof(info)) && equals(info.id,e->id))return 1;}
-    return 0;
+    int count=aster_appmgr_count(),valid=count>=0&&count<=32;
+    for(int j=0;j<entry_count;j++){entries[j].installed=0;entries[j].installed_version[0]=0;entries[j].install_state=valid?APP_MISSING:APP_UNKNOWN;}
+    for(int i=0;valid&&i<count;i++){
+        aster_app_info_t info={.size=sizeof(info),.version=2};
+        if(aster_appmgr_list(i,&info,sizeof(info))){valid=0;break;}
+        for(int j=0;j<entry_count;j++)if(equals(info.id,entries[j].id)){
+            entry *e=&entries[j];int order;
+            e->installed=1;memcpy(e->installed_version,info.app_version,sizeof(e->installed_version));e->installed_version[sizeof(e->installed_version)-1]=0;
+            e->install_state=store_version_compare(e->version,e->installed_version,&order)?APP_UNKNOWN:order>0?APP_UPDATE:order<0?APP_NEWER:APP_CURRENT;
+        }
+    }
+    if(!valid)for(int j=0;j<entry_count;j++)entries[j].install_state=APP_UNKNOWN;
+    for(int j=0;j<entry_count;j++)aster_logf(ASTER_LOG_INFO,"STORE version id=%s local=%s remote=%s state=%d",entries[j].id,entries[j].installed_version[0]?entries[j].installed_version:"none",entries[j].version,entries[j].install_state);
 }
+static int is_installed(const entry *e){return e->installed;}
+static int can_install(const entry *e){return (e->install_state==APP_MISSING||e->install_state==APP_UPDATE)&&!equals(e->id,"aster.store");}
+static const char *install_action(const entry *e)
+{return e->install_state==APP_MISSING?"下载":e->install_state==APP_UPDATE?"更新":e->install_state==APP_NEWER?"本机较新":e->install_state==APP_CURRENT?"已是最新":"版本未知";}
+static const char *list_action(const entry *e)
+{return equals(e->id,"aster.store")?"当前":can_install(e)?install_action(e):e->installed?"打开":"不可用";}
+static const char *install_status(const entry *e)
+{return e->install_state==APP_UPDATE?"有更新":e->install_state==APP_CURRENT?"已安装":e->install_state==APP_NEWER?"本机较新":e->install_state==APP_UNKNOWN?"版本未知":"未安装";}
 static int valid_server(const char *s)
 {
     size_t n=strlen(s);if(n<8 || n>=sizeof(server))return 0;
@@ -63,7 +84,7 @@ static void message(const char *s,int error)
 {aster_snprintf(status_line,sizeof(status_line),"%s (%d)",s,error);dirty=1;}
 static void stop_network(void)
 {
-    wanted=NONE;active=NONE;
+    wanted=NONE;active=NONE;buffered=0;
     if(output){aster_fs_close(output);output=0;}
     if(request>0){aster_http_cancel(request);closing=1;}
 }
@@ -101,7 +122,7 @@ static void make_query(void)
         device.board,target,device.abi_version,(uint32_t)device.feature_flags,ge.w,ge.h);
 }
 static void refresh(void)
-{release_icons();entry_count=0;list_offset=0;catalog_page=0;view=LIST;wanted=CATALOG;message("正在获取兼容应用",0);}
+{release_icons();entry_count=0;list_offset=0;catalog_page=0;catalog_total=0;catalog_ready=catalog_tail=0;view=LIST;wanted=CATALOG;message("正在获取兼容应用",0);}
 static int read_catalog(void)
 {
     release_icons();
@@ -112,6 +133,7 @@ static int read_catalog(void)
         if(text(at,"id",e->id,sizeof(e->id))<0 || text(at,"name",e->name,sizeof(e->name))<0 ||
            text(at,"release",e->release,sizeof(e->release))<0 || !hex64(e->release) ||
            text(at,"version",e->version,sizeof(e->version))<0 ||
+           store_version_compare(e->version,e->version,&(int){0}) ||
            number(at,"bytes",&e->bytes) || number(at,"file_count",&e->count) || !e->count || e->count>4097)return -1;
         if(text(at,"description",e->description,sizeof(e->description))<0)copystr(e->description,"此应用未提供简介。");
         int icon=json_key(&doc,at,"icon");
@@ -129,6 +151,11 @@ static int read_catalog(void)
         }
         at=doc.tokens[at].next;
     }
+    if(number(0,"total",&catalog_total)||catalog_total>80008u)return -1;
+    if(catalog_page>0&&!entry_count&&catalog_total<=(uint32_t)catalog_page*PAGE){catalog_page=list_offset=catalog_tail=0;catalog_ready=0;wanted=CATALOG;return 0;}
+    if(catalog_total<(uint32_t)catalog_page*PAGE+(unsigned)entry_count)return -1;
+    if(catalog_tail)list_offset=entry_count?((entry_count-1)/visible())*visible():0;
+    catalog_tail=0;catalog_ready=1;installed_snapshot();
     catalog_next=next_page();if(catalog_next< -1)return -1;
     dirty=1;copystr(status_line,entry_count?"仅显示与此设备兼容的版本":"没有适配此设备的已发布应用");return 0;
 }
@@ -152,7 +179,7 @@ static int verify_release(void)
     int screens=json_key(&doc,0,"screens");if(screens<0 || doc.tokens[screens].type!='[')return -1;
     if(doc.tokens[screens].count) {
         int fit=0,at=screens+1;
-        for(int i=0;i<doc.tokens[screens].count;i++) {uint32_t w,h;if(doc.tokens[at].type!='[' || doc.tokens[at].count!=2 || json_uint(&doc,at+1,&w)||json_uint(&doc,at+2,&h))return -1;if(w==ge.w&&h==ge.h)fit=1;at=doc.tokens[at].next;}
+        for(int i=0;i<doc.tokens[screens].count;i++) {uint32_t w,h;if(doc.tokens[at].type!='[' || doc.tokens[at].count!=2 || json_uint(&doc,at+1,&w)||json_uint(&doc,at+2,&h))return -1;if((w==ge.w&&h==ge.h)||(w==ge.h&&h==ge.w))fit=1;at=doc.tokens[at].next;}
         if(!fit)return -1;
     }
     static const char *names[23]={"display","touch","mouse","keyboard","camera","audio-in","audio-out","wifi","bluetooth","accelerometer","gyroscope","filesystem","rtc","psram","framebuffer","network","http","tls","audio-stream","mqtt","websocket","audio-effects","audio-effects-memory"};
@@ -216,6 +243,8 @@ static void begin_file(void)
 }
 static void begin_install(void)
 {
+    if(!can_install(&entries[selected]))return;
+    buffered=0;
     if(cleanup[0] || network_busy() || wanted)return;
     if(equals(entries[selected].id,"aster.store")){message("商城自身更新请使用设备维护工具",ASTER_ENOTSUP);return;}
     uint32_t nonce=aster_time_now_ms();aster_stat_t st={.size=sizeof(st),.version=1};int unique=0;
@@ -258,6 +287,11 @@ static int check_headers(const aster_http_status_t *status)
     r=aster_http_header(request,"ETag",4,0,got,sizeof(got)-1,&required);if(r<0)return r;got[r]=0;
     aster_snprintf(expected,sizeof(expected),"\"%s\"",files[file_at].sha);return equals(got,expected)?0:ASTER_EPROTO;
 }
+static int flush_download(void)
+{
+ unsigned written=0;while(written<buffered){int n=aster_fs_write(output,buffer+written,buffered-written);if(n<=0||(unsigned)n>buffered-written)return n<0?n:ASTER_EIO;written+=(unsigned)n;}
+ buffered=0;return 0;
+}
 static void network_tick(void)
 {
     if(closing){int r=aster_http_close(request);if(r==ASTER_EAGAIN)return;request=closing=0;}
@@ -269,11 +303,14 @@ static void network_tick(void)
     if(!header_checked){r=check_headers(&status);if(r==ASTER_EAGAIN)return;if(r){fail("服务器响应不匹配",r);return;}header_checked=1;}
     uint32_t started=aster_time_now_ms();
     for(unsigned i=0;i<16;i++) {
-        r=aster_http_read(request,buffer,sizeof(buffer));if(r==ASTER_EAGAIN)return;if(r<0){fail("下载中断，请重试",r);return;}
+        unsigned room=active==FILE_DATA?sizeof(buffer)-buffered:sizeof(buffer);
+        if(room>ASTER_HTTP_READ_LIMIT)room=ASTER_HTTP_READ_LIMIT;
+        r=aster_http_read(request,buffer+(active==FILE_DATA?buffered:0),room);if(r==ASTER_EAGAIN)return;if(r<0){fail("下载中断，请重试",r);return;}
         if(!r) {
             if(aster_http_status(request,&status,sizeof(status)) || status.state!=ASTER_HTTP_STATE_DONE){fail("下载尚未完成",ASTER_EPROTO);return;}
             closing=1;
             if(active==FILE_DATA) {
+                if((r=flush_download())){fail("SD 卡写入失败",r);return;}
                 if(chunk_received!=chunk_end-chunk_start+1){fail("下载长度错误",ASTER_ECORRUPT);return;}
                 active=NONE;if(file_received==files[file_at].bytes)file_done();else wanted=FILE_DATA;
             } else if(active==ICON) {
@@ -300,9 +337,9 @@ static void network_tick(void)
         }
         if(active==FILE_DATA) {
             if((uint32_t)r>chunk_end-chunk_start+1-chunk_received || (uint32_t)r>files[file_at].bytes-file_received){fail("文件超出声明长度",ASTER_ECORRUPT);return;}
-            unsigned written=0;
-            while(written<(unsigned)r){int n=aster_fs_write(output,buffer+written,(unsigned)r-written);if(n<=0 || (unsigned)n>(unsigned)r-written){fail("SD 卡写入失败或空间不足",n);return;}written+=(unsigned)n;}
-            sha_update(&checksum,buffer,(unsigned)r);file_received+=(unsigned)r;chunk_received+=(unsigned)r;total_received+=(unsigned)r;dirty=1;
+            sha_update(&checksum,buffer+buffered,(unsigned)r);buffered+=(unsigned)r;
+            if(buffered==sizeof(buffer)){int error=flush_download();if(error){fail("SD 卡写入失败或空间不足",error);return;}}
+            file_received+=(unsigned)r;chunk_received+=(unsigned)r;total_received+=(unsigned)r;dirty=1;
         } else {
             if(body_len+(unsigned)r>=sizeof(body) || (active==ICON && body_len+(unsigned)r>entries[icon_at].icon_bytes)){fail("商城数据过大",ASTER_EMSGSIZE);return;}
             memcpy(body+body_len,buffer,(unsigned)r);body_len+=(unsigned)r;
@@ -313,9 +350,41 @@ static void network_tick(void)
 static void label(int x,int y,unsigned size,uint16_t color,const char *s)
 {aster_ge_text(&ge,x,y+aster_text_asc(size),size,color,ASTER_GFX_NOBG,s);}
 static void button(int x,int y,int w,int h,const char *s,int enabled)
-{aster_ge_rect_r(&ge,x,y,w,h,enabled?blue:muted,8,0);label(x+10,y+(h-16)/2,16,white,s);}
+{if(ge.w>=ge.h||ge.w>=320){aster_ge_rect_r(&ge,x,y,w,h,enabled?blue:muted,8,0);label(x+10,y+(h-16)/2,16,white,s);return;}unsigned px=16;if(strlen(s)>9&&w<90)px=12;aster_ge_rect_r(&ge,x,y,w,h,enabled?blue:muted,8,0);int tw=aster_gfx_text_w(px,s,strlen(s));if(tw<0)tw=px*2;label(x+(w-tw)/2,y+(h-(int)px)/2,px,white,s);}
+static int portrait(void){return ge.w<ge.h&&ge.w<320;}
 static int compact(void){return ge.h<300;}
-static int visible(void){int n=compact()?((int)ge.h-118)/50:((int)ge.h-164)/72;return n<1?1:n>6?6:n;}
+static int visible(void){int n=portrait()?((int)ge.h-152)/56:compact()?((int)ge.h-118)/50:((int)ge.h-164)/72;return n<1?1:n>6?6:n;}
+static void catalog_fetch(int page,int tail)
+{
+ release_icons();entry_count=list_offset=0;catalog_ready=0;catalog_tail=tail;catalog_page=page;wanted=CATALOG;message("正在获取兼容应用",0);
+}
+static void previous_page(void)
+{
+ if(network_busy()||!catalog_ready)return;
+ if(list_offset>0){list_offset-=visible();if(list_offset<0)list_offset=0;}
+ else if(catalog_page>0)catalog_fetch(catalog_page-1,1);
+}
+static void next_catalog_page(void)
+{
+ if(network_busy()||!catalog_ready)return;
+ if(list_offset+visible()<entry_count)list_offset+=visible();
+ else if(catalog_next>=0)catalog_fetch(catalog_next,0);
+}
+static void page_indicator(int y,unsigned px)
+{
+ char text[64];
+ if(!catalog_ready)copystr(text,"正在加载页数…");
+ else {
+  unsigned n=visible(),per=(PAGE+n-1)/n;
+  unsigned total=(catalog_total/PAGE)*per+((catalog_total%PAGE)+n-1)/n;
+  unsigned current=catalog_total?(unsigned)catalog_page*per+(unsigned)list_offset/n+1:0;
+  aster_snprintf(text,sizeof(text),"第 %u / %u 页",current,total);
+  static unsigned last_page=UINT32_MAX,last_total=UINT32_MAX;
+  if(current!=last_page||total!=last_total){aster_logf(ASTER_LOG_INFO,"STORE page current=%u total=%u",current,total);last_page=current;last_total=total;}
+ }
+ int width=aster_gfx_text_w(px,text,strlen(text));if(width<0)width=100;
+ label(((int)ge.w-width)/2,y,px,muted,text);
+}
 static void icon_tick(void)
 {
     if(request || wanted || cleanup[0] || (view!=LIST && view!=DETAIL))return;
@@ -345,6 +414,82 @@ static void paragraph(int y,unsigned size,const char *p,int lines)
         if(*p=='\n')p++;row[n]=0;label(18,y,size,ink,row);y+=size+4;
     }
 }
+static void fit_label(int x,int y,unsigned size,uint16_t color,const char *text,unsigned width)
+{
+ char out[96];unsigned n=0,used=0;const char *p=text;
+ while(*p&&n<sizeof(out)-5){unsigned bytes=(unsigned char)*p<128?1:(unsigned char)*p<224?2:(unsigned char)*p<240?3:4;unsigned advance=bytes==1?size/2:size;
+  if(used+advance+size>width)break;for(unsigned k=0;k<bytes&&*p;k++)out[n++]=*p++;used+=advance;}
+ if(*p){memcpy(out+n,"…",3);n+=3;}out[n]=0;label(x,y,size,color,out);
+}
+static int action_ready(const entry *e)
+{return !network_busy()&&!cleanup[0]&&!equals(e->id,"aster.store")&&(can_install(e)||e->installed);}
+static void row_action(entry *e)
+{
+ if(!action_ready(e))return;
+ if(can_install(e))begin_install();
+ else if(e->installed){int r=aster_appmgr_start(e->id,strlen(e->id));if(r)message("打开失败",r);}
+}
+static void list_tap(int x,int y,int first,int step,int height)
+{
+ if(x<12||x>=(int)ge.w-12||y<first)return;int row=(y-first)/step,index=list_offset+row,inside=(y-first)%step;
+ if(row>=visible()||index>=entry_count||inside>=height)return;selected=index;
+ int top=portrait()?8:compact()?4:12,button_h=portrait()?34:compact()?36:40;
+ if(x>=(int)ge.w-(portrait()?76:92)&&x<(int)ge.w-20&&inside>=top&&inside<top+button_h)row_action(&entries[index]);
+ else view=DETAIL;
+}
+static void draw_portrait(void)
+{
+ char s[192];int bottom=ge.h-44;
+ label(12,10,20,ink,"Aster 商城");aster_snprintf(s,sizeof(s),"%s · %s",device.board,target);fit_label(12,36,10,muted,s,ge.w-24);
+ if(view==LIST){
+  fit_label(12,56,11,muted,status_line,ge.w-24);
+  for(int row=0;row<visible()&&list_offset+row<entry_count;row++){
+   entry *e=&entries[list_offset+row];int y=74+row*56;
+   aster_ge_rect_r(&ge,12,y,ge.w-24,50,white,7,0);app_icon(e,18,y+7,36);
+   fit_label(62,y+7,14,ink,e->name,ge.w-146);
+   aster_snprintf(s,sizeof(s),"v%s · %s",e->version,install_status(e));fit_label(62,y+29,10,muted,s,ge.w-146);
+   button(ge.w-76,y+8,56,34,list_action(e),action_ready(e));
+  }
+  int w=(ge.w-28)/4;page_indicator(bottom-22,12);
+  button(8,bottom,w,36,"设置",!network_busy());button(12+w,bottom,w,36,"刷新",!network_busy());
+  button(16+2*w,bottom,w,36,"上页",catalog_ready&&!network_busy()&&(list_offset>0||catalog_page>0));
+  button(20+3*w,bottom,w,36,"下页",catalog_ready&&!network_busy()&&(list_offset+visible()<entry_count||catalog_next>=0));
+ }else if(view==SETTINGS){
+  size_t n=strlen(edit);unsigned shown=(ge.w-36)/7;label(12,58,12,blue,edit+(n>shown?n-shown:0));
+  int keyw=(ge.w-24)/8;
+  for(unsigned i=0;i<sizeof(keyboard)-1;i++){char t[2]={keyboard[i],0};int x=12+(i%8)*keyw,y=82+(i/8)*24;aster_ge_rect_r(&ge,x,y,keyw-3,22,blue,3,0);label(x+6,y+4,12,white,t);}
+  button(12,234,100,28,"删除",1);button(120,234,ge.w-132,28,"清空",1);
+  button(12,bottom,70,36,"返回",1);button(90,bottom,ge.w-102,36,"保存并连接",valid_server(edit));
+ }else if(view==DETAIL){
+  entry *e=&entries[selected];app_icon(e,12,66,40);fit_label(60,68,18,ink,e->name,ge.w-72);
+  aster_snprintf(s,sizeof(s),"v%s · %u KiB",e->version,e->bytes/1024);fit_label(60,94,11,muted,s,ge.w-72);
+  paragraph(122,13,e->description,3);label(18,181,11,muted,"所需权限");paragraph(201,11,e->permissions[0]?e->permissions:"无额外权限",2);
+  if(e->installed){aster_snprintf(s,sizeof(s),"本机 %s · %s",e->installed_version,install_status(e));fit_label(12,bottom-24,11,muted,s,ge.w-24);}
+  button(12,bottom,64,36,"返回",1);button(88,bottom,64,36,"打开",is_installed(e));button(164,bottom,ge.w-176,36,install_action(e),can_install(e)&&!cleanup[0]&&!network_busy());
+ }else if(view==DOWNLOAD){
+  fit_label(18,80,18,ink,entries[selected].name,ge.w-36);label(18,118,14,ink,"下载并校验中");
+  unsigned progress=entries[selected].bytes?(uint64_t)total_received*100/entries[selected].bytes:0;
+  aster_ge_rect_r(&ge,18,154,ge.w-36,12,white,6,0);aster_ge_rect_r(&ge,18,154,(ge.w-36)*progress/100,12,blue,6,0);
+  aster_snprintf(s,sizeof(s),"%u%% · %u / %u KiB",progress,total_received/1024,entries[selected].bytes/1024);fit_label(18,179,12,ink,s,ge.w-36);
+  aster_snprintf(s,sizeof(s),"已校验 %u / %u 个文件",completed_files,total_files);label(18,208,12,muted,s);
+  button(18,bottom,ge.w-36,36,"取消下载",1);
+ }else{label(18,80,18,ink,"操作结果");paragraph(122,14,status_line,5);button(18,bottom,ge.w-36,36,"返回商城",1);}
+}
+static void tap_portrait(int x,int y)
+{
+ int bottom=ge.h-44;
+ if(view==SETTINGS){
+  int keyw=(ge.w-24)/8;
+  if(x>=12&&x<12+8*keyw&&y>=82&&y<226){unsigned col=(x-12)/keyw,row=(y-82)/24,i=row*8+col;if(i<sizeof(keyboard)-1&&strlen(edit)+1<sizeof(edit)){size_t n=strlen(edit);edit[n]=keyboard[i];edit[n+1]=0;}}
+  else if(y>=234&&y<262){if(x<116){size_t n=strlen(edit);if(n)edit[n-1]=0;}else edit[0]=0;}
+  else if(y>=bottom&&y<bottom+36){if(x<86)view=LIST;else if(valid_server(edit)){copystr(server,edit);size_t n=strlen(server);while(n>8&&server[n-1]=='/')server[--n]=0;aster_kv_set("store.url",9,server,n+1);refresh();}}
+ }else if(view==LIST){
+  if(y>=bottom&&y<bottom+36){int col=(x-8)/(((int)ge.w-28)/4+4);if(!network_busy()&&col==0){copystr(edit,server);view=SETTINGS;}else if(!network_busy()&&col==1)refresh();else if(col==2)previous_page();else if(col==3)next_catalog_page();}
+  else list_tap(x,y,74,56,50);
+ }else if(view==DETAIL&&y>=bottom&&y<bottom+36){if(x<82)view=LIST;else if(x<158){if(is_installed(&entries[selected])){int r=aster_appmgr_start(entries[selected].id,strlen(entries[selected].id));if(r)message("打开失败",r);}}else begin_install();}
+ else if(view==DOWNLOAD&&y>=bottom&&y<bottom+36)fail("下载已取消",0);
+ else if(view==RESULT&&y>=bottom&&y<bottom+36){view=LIST;if(!network_busy())refresh();}
+}
 static void draw_compact(void)
 {
     char s[192];int bottom=ge.h-44,keyw=(ge.w-24)/12;
@@ -361,16 +506,18 @@ static void draw_compact(void)
         for(int row=0;row<visible() && list_offset+row<entry_count;row++) {
             entry *e=&entries[list_offset+row];int y=74+row*50;
             aster_ge_rect_r(&ge,12,y,ge.w-24,44,white,6,0);
-            app_icon(e,18,y+4,36);label(64,y+3,16,ink,e->name);aster_snprintf(s,sizeof(s),"v%s · %u KiB%s",e->version,e->bytes/1024,is_installed(e)?" · 已安装":"");label(64,y+25,10,muted,s);
+            app_icon(e,18,y+4,36);fit_label(64,y+3,16,ink,e->name,ge.w-164);aster_snprintf(s,sizeof(s),"v%s · %s",e->version,install_status(e));fit_label(64,y+25,10,muted,s,ge.w-164);
+            button(ge.w-92,y+4,72,36,list_action(e),action_ready(e));
         }
         int w=(ge.w-28)/4;
         button(8,bottom,w,36,"设置",!network_busy());button(12+w,bottom,w,36,"刷新",!network_busy());
-        button(16+2*w,bottom,w,36,"上页",list_offset>0||catalog_page>0);button(20+3*w,bottom,w,36,"下页",list_offset+visible()<entry_count||catalog_next>=0);
+        page_indicator(bottom-22,12);
+        button(16+2*w,bottom,w,36,"上页",catalog_ready&&!network_busy()&&(list_offset>0||catalog_page>0));button(20+3*w,bottom,w,36,"下页",catalog_ready&&!network_busy()&&(list_offset+visible()<entry_count||catalog_next>=0));
     } else if(view==DETAIL) {
         entry *e=&entries[selected];app_icon(e,18,60,40);label(70,60,18,ink,e->name);
-        aster_snprintf(s,sizeof(s),"v%s · %u KiB · %u 个文件",e->version,e->bytes/1024,e->count);label(70,84,11,muted,s);
+        if(e->installed)aster_snprintf(s,sizeof(s),"本机 %s → 商城 %s",e->installed_version,e->version);else aster_snprintf(s,sizeof(s),"v%s · %u KiB · %u 个文件",e->version,e->bytes/1024,e->count);label(70,84,11,muted,s);
         paragraph(105,12,e->description,2);label(18,140,10,muted,"所需权限");paragraph(154,11,e->permissions[0]?e->permissions:"无额外权限",2);
-        button(12,bottom,62,36,"返回",1);button(80,bottom,62,36,"打开",is_installed(e));button(148,bottom,ge.w-160,36,"下载安装",!cleanup[0]&&!network_busy());
+        button(12,bottom,62,36,"返回",1);button(80,bottom,62,36,"打开",is_installed(e));button(148,bottom,ge.w-160,36,install_action(e),can_install(e)&&!cleanup[0]&&!network_busy());
     } else if(view==DOWNLOAD) {
         label(18,62,18,ink,entries[selected].name);label(18,90,12,ink,"下载并校验中");
         unsigned progress=entries[selected].bytes?(uint64_t)total_received*100/entries[selected].bytes:0;
@@ -397,9 +544,9 @@ static void tap_compact(int x,int y)
             int col=(x-8)/(((int)ge.w-28)/4+4);
             if(!network_busy() && col==0){copystr(edit,server);view=SETTINGS;}
             else if(!network_busy() && col==1)refresh();
-            else if(!network_busy() && col==2){if(list_offset>0)list_offset-=visible();else if(catalog_page>0){catalog_page--;wanted=CATALOG;}if(list_offset<0)list_offset=0;}
-            else if(!network_busy() && col==3){if(list_offset+visible()<entry_count)list_offset+=visible();else if(catalog_next>=0){catalog_page=catalog_next;list_offset=0;wanted=CATALOG;}}
-        } else if(y>=74 && y<74+visible()*50){int index=list_offset+(y-74)/50;if(index<entry_count){selected=index;view=DETAIL;}}
+            else if(col==2)previous_page();
+            else if(col==3)next_catalog_page();
+        } else list_tap(x,y,74,50,44);
     } else if(view==DETAIL && y>=bottom && y<bottom+36){if(x<77)view=LIST;else if(x<145){if(is_installed(&entries[selected])){int r=aster_appmgr_start(entries[selected].id,strlen(entries[selected].id));if(r)message("打开失败",r);}}else begin_install();}
     else if(view==DOWNLOAD && y>=bottom && y<bottom+36)fail("下载已取消",0);
     else if(view==RESULT && y>=bottom && y<bottom+36){view=LIST;if(!network_busy())refresh();}
@@ -407,6 +554,7 @@ static void tap_compact(int x,int y)
 static void draw(void)
 {
     aster_ge_clear(&ge,bg);
+    if(portrait()){draw_portrait();goto present;}
     if(compact()){draw_compact();goto present;}
     label(18,16,24,ink,"Aster 商城");
     char s[192];aster_snprintf(s,sizeof(s),"%s · %s",device.board,target);label(18,49,12,muted,s);
@@ -423,12 +571,13 @@ static void draw(void)
         int n=visible();for(int row=0;row<n && list_offset+row<entry_count;row++) {
             entry *e=&entries[list_offset+row];int y=104+row*72;
             aster_ge_rect_r(&ge,12,y,ge.w-24,64,white,10,0);
-            app_icon(e,20,y+8,48);label(80,y+8,18,ink,e->name);aster_snprintf(s,sizeof(s),"v%s · %u KiB%s",e->version,e->bytes/1024,is_installed(e)?" · 已安装":"");label(80,y+36,12,muted,s);
-            label(ge.w-52,y+23,14,blue,"查看");
+            app_icon(e,20,y+8,48);fit_label(80,y+8,18,ink,e->name,ge.w-184);aster_snprintf(s,sizeof(s),"v%s · %u KiB · %s",e->version,e->bytes/1024,install_status(e));fit_label(80,y+36,12,muted,s,ge.w-184);
+            button(ge.w-92,y+12,72,40,list_action(e),action_ready(e));
         }
         button(12,bottom,66,40,"设置",!network_busy());button(84,bottom,66,40,"刷新",!network_busy());
-        button(156,bottom,66,40,"上页",list_offset>0||catalog_page>0);
-        button(228,bottom,(int)ge.w-240,40,"下页",list_offset+n<entry_count||catalog_next>=0);
+        page_indicator(bottom-24,12);
+        button(156,bottom,66,40,"上页",catalog_ready&&!network_busy()&&(list_offset>0||catalog_page>0));
+        button(228,bottom,(int)ge.w-240,40,"下页",catalog_ready&&!network_busy()&&(list_offset+n<entry_count||catalog_next>=0));
     } else if(view==DETAIL) {
         entry *e=&entries[selected];app_icon(e,18,86,ge.h>=400?56:36);label(ge.h>=400?90:64,92,22,ink,e->name);
         aster_snprintf(s,sizeof(s),"版本 %s · 下载 %u KiB · %u 个文件",e->version,e->bytes/1024,e->count);label(18,ge.h>=400?150:128,12,muted,s);
@@ -436,8 +585,8 @@ static void draw(void)
         const char *p=e->description;int y=ge.h>=400?182:164;
         for(int line=0;*p && line<(ge.h>=400?3:1);line++) {char row[96];unsigned n=0,chars=0,max=(ge.w-36)/16;while(*p && *p!='\n' && chars<max && n<sizeof(row)-5){unsigned bytes=((unsigned char)*p<128)?1:((unsigned char)*p<224)?2:((unsigned char)*p<240)?3:4;for(unsigned k=0;k<bytes&&*p;k++)row[n++]=*p++;chars++;}if(*p=='\n')p++;row[n]=0;label(18,y,16,ink,row);y+=25;}
         label(18,y+12,14,muted,"所需权限");label(18,y+38,12,ink,e->permissions[0]?e->permissions:"无额外权限");
-        if(ge.h>=400)label(18,bottom-34,12,muted,cleanup[0]?"正在清理上次下载…":"程序及资源校验完成后安装");
-        button(18,bottom,70,40,"返回",1);button(96,bottom,70,40,"打开",is_installed(e));button(174,bottom,(int)ge.w-192,40,"下载安装",!cleanup[0]&&!network_busy());
+        if(ge.h>=400){if(e->installed)aster_snprintf(s,sizeof(s),"本机版本 %s · %s",e->installed_version,install_status(e));else copystr(s,"程序及资源校验完成后安装");label(18,bottom-34,12,muted,cleanup[0]?"正在清理上次下载…":s);}
+        button(18,bottom,70,40,"返回",1);button(96,bottom,70,40,"打开",is_installed(e));button(174,bottom,(int)ge.w-192,40,install_action(e),can_install(e)&&!cleanup[0]&&!network_busy());
     } else if(view==DOWNLOAD) {
         label(18,ge.h>=400?100:92,22,ink,entries[selected].name);label(18,ge.h>=400?145:128,16,ink,"下载并校验中");
         uint32_t total=entries[selected].bytes;unsigned progress=total?(uint64_t)total_received*100/total:0;
@@ -459,6 +608,7 @@ static void tap(int x,int y)
     if(x<0 || y<0 || (unsigned)x>=ge.w || (unsigned)y>=ge.h)return;
     if(active==ICON)stop_network();
     if(wanted==ICON)wanted=NONE;
+    if(portrait()){tap_portrait(x,y);dirty=1;return;}
     if(compact()){tap_compact(x,y);dirty=1;return;}
     int bottom=(int)ge.h-56;
     if(view==SETTINGS) {
@@ -470,9 +620,9 @@ static void tap(int x,int y)
         if(y>=bottom) {
             if(x<78 && !network_busy()){copystr(edit,server);view=SETTINGS;}
             else if(x<150 && !network_busy())refresh();
-            else if(x<222 && !network_busy()){if(list_offset>0)list_offset-=visible();else if(catalog_page>0){catalog_page--;wanted=CATALOG;}if(list_offset<0)list_offset=0;}
-            else if(!network_busy()){if(list_offset+visible()<entry_count)list_offset+=visible();else if(catalog_next>=0){catalog_page=catalog_next;list_offset=0;wanted=CATALOG;}}
-        } else if(y>=104) {int index=list_offset+(y-104)/72;if(index<entry_count && index<list_offset+visible()){selected=index;view=DETAIL;}}
+            else if(x<222)previous_page();
+            else next_catalog_page();
+        } else list_tap(x,y,104,72,64);
     } else if(view==DETAIL && y>=bottom){if(x<88)view=LIST;else if(x<166){if(is_installed(&entries[selected])){int r=aster_appmgr_start(entries[selected].id,strlen(entries[selected].id));if(r)message("打开失败",r);}}else begin_install();}
     else if(view==DOWNLOAD && y>=bottom)fail("下载已取消",0);
     else if(view==RESULT && y>=bottom){view=LIST;if(!network_busy())refresh();}
@@ -485,11 +635,11 @@ ASTER_APP_EXPORT int aster_app_init(void)
     if(equals(target,"unknown") || !device.board[0])return ASTER_ENOTSUP;
     aster_display_info_t display={.size=sizeof(display),.version=1};
     r=aster_display_get_info(0,&display,sizeof(display));if(r)return r;
-    unsigned width=display.app_width,height=display.app_height;if(width<height){unsigned swap=width;width=height;height=swap;}
+    unsigned width=display.app_width,height=display.app_height;
     aster_surface_desc_t desc={.size=sizeof(desc),.version=1,.width=width,.height=height,.format=ASTER_PIXEL_RGB565};
     r=aster_surface_create(&desc,sizeof(desc),&surface);if(r)return r;
     aster_surface_buffer_t b={.size=sizeof(b),.version=1};r=aster_surface_acquire(surface,&b,sizeof(b));if(r)return r;
-    if(b.width<320 || b.height<240)return ASTER_ENOTSUP;
+    if((b.width<240||b.height<320)&&(b.width<320||b.height<240))return ASTER_ENOTSUP;
     aster_ge_init(&ge,surface,b.width,b.height,commands,128,arena,sizeof(arena));
     ink=ASTER_RGB565(25,38,58);bg=ASTER_RGB565(242,245,250);muted=ASTER_RGB565(111,126,145);blue=ASTER_RGB565(36,102,220);white=ASTER_RGB565(255,255,255);
     char saved[192];r=aster_kv_get("store.url",9,saved,sizeof(saved));if(r>0 && r<=(int)sizeof(saved) && saved[r-1]==0 && valid_server(saved))copystr(server,saved);

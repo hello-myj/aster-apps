@@ -150,7 +150,7 @@ void drawFontHvFullShadowAligned(SDL_Surface *surface, int x, int y, const char 
  */
 void drawFontHv(SDL_Surface *surface, int x, int y, const char *text, Font font, Uint8 hue, Sint8 value)
 {
- if(tyrian_zh_draw(surface,x,y,text,font,hue,value,0))return;
+ if(value==-10 && tyrian_zh_width(text,font)>=0)return; if(tyrian_zh_draw(surface,x,y,text,font,hue,value,0))return;
 	bool highlight = false;
 
 	for (; *text != '\0'; ++text)

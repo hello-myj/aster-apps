@@ -3,6 +3,14 @@
 #include "../src/codec.h"
 int main(void)
 {
+    int order;
+    assert(!store_version_compare("1.10.0","1.9.9",&order)&&order>0);
+    assert(!store_version_compare("1.2","1.2.0",&order)&&!order);
+    assert(!store_version_compare("2.0.0","10.0.0",&order)&&order<0);
+    assert(!store_version_compare("0.9.255","0.10.0",&order)&&order<0);
+    assert(!store_version_compare("01.02.003","1.2.3",&order)&&!order);
+    const char *bad_versions[]={"","1","1.","1.2.","1.2.3.4","1.256.0","256.0","1.0-beta","-1.2","1.2+build"};
+    for(unsigned i=0;i<sizeof(bad_versions)/sizeof(*bad_versions);i++)assert(store_version_compare(bad_versions[i],"1.0.0",&order)<0);
     store_sha256 s;char hash[65];sha_init(&s);sha_hex(&s,hash);
     assert(!strcmp(hash,"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
     sha_init(&s);sha_update(&s,"a",1);sha_update(&s,"bc",2);sha_hex(&s,hash);

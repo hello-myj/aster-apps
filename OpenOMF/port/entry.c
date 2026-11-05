@@ -108,7 +108,13 @@ ASTER_APP_EXPORT void aster_app_event(const aster_event_t *e){
         if(!did)break;
         game_state_palette_transform(gs);vga_state_render();
     }
-    omf_input_mode(gs->this_id>=SCENE_ARENA0&&gs->this_id<=SCENE_ARENA4&&!gs->paused&&!console_window_is_open());
+    /* Selection and VS poll player one's controller, not the menu controller. */
+    int inputMode=0;
+    if(!gs->paused&&!console_window_is_open()) {
+        if(gs->this_id>=SCENE_ARENA0&&gs->this_id<=SCENE_ARENA4)inputMode=1;
+        else if(gs->this_id==SCENE_MELEE||gs->this_id==SCENE_VS)inputMode=2;
+    }
+    omf_input_mode(inputMode);
     if((int)gs->this_id!=previousScene){previousScene=gs->this_id;aster_printf("OMF SCENE id=%u name=%s heap=%u peak=%u",gs->this_id,scene_get_name(gs->this_id),omf_heap_used(),omf_heap_peak());}
     uint32_t drawStart=aster_time_now_ms();phaseLogic+=drawStart-logicStart;
     video_render_prepare(game_state_get_framebuffer_options(gs));game_state_render(gs);osd_render();console_render();uint32_t finishStart=aster_time_now_ms();phaseDraw+=finishStart-drawStart;video_render_finish();phaseFinish+=aster_time_now_ms()-finishStart;

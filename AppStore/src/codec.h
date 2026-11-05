@@ -12,3 +12,6 @@ typedef struct {uint32_t h[8];uint64_t bytes;uint8_t block[64];unsigned used;} s
 void sha_init(store_sha256 *s);
 void sha_update(store_sha256 *s,const void *data,size_t n);
 void sha_hex(store_sha256 *s,char output[65]);
+
+/* StoreServer numeric versions: major.minor[.patch], each component 0..255. */
+int store_version_compare(const char *a,const char *b,int *order);

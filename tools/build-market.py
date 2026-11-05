@@ -37,6 +37,10 @@ for name in args.projects or PROJECTS:
     if name == 'GoldMiner':
         print(f'Built {name}: {workspace}/dist/{args.target}; resources: {project}/dist/{args.target}/resources',flush=True)
         continue
+    if name == 'OutRun':
+        subprocess.run([sys.executable,str(project/'tools/prepare_store.py')],check=True)
+        print(f'Built {name}: {workspace}/dist/{args.target}; resources: {project}/dist/store-resources',flush=True)
+        continue
     resources = project / 'dist/resources'
     resources.mkdir(parents=True, exist_ok=True)
     if name != 'TouchTest':
@@ -47,4 +51,6 @@ for name in args.projects or PROJECTS:
                 shutil.copytree(source / rel, resources / rel, dirs_exist_ok=True)
         if not (resources / 'resources').is_dir():
             raise RuntimeError(f'{name}: prepare external resources before publishing')
+    if name == 'PixelWheels' and args.target == 'xtensa':
+        subprocess.run([sys.executable, str(project/'tools/prepare_lckfb_assets.py')], check=True)
     print(f'Built {name}: {workspace}/dist/{args.target}; resources: {resources}', flush=True)

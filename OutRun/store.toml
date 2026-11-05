@@ -4,13 +4,20 @@ id = "aster.outrun"
 [[variants]]
 target = "riscv"
 package = "dist/riscv/aster.outrun.ast"
-resources = "dist/resources"
+resources = "dist/store-resources"
 boards = ["osptek-p4-st7102"]
 screens = [[480, 480]]
 
 [[variants]]
+target = "xtensa"
+package = "dist/xtensa/aster.outrun.ast"
+resources = "dist/store-resources"
+boards = ["aster.esp32s3.lckfb"]
+screens = [[320, 240]]
+
+[[variants]]
 target = "wasm"
 package = "build/sim/dist/riscv/aster.outrun.ast"
-resources = "dist/resources"
+resources = "dist/store-resources"
 boards = ["aster.simulator"]
-screens = [[480, 480], [480, 320]]
+screens = [[480, 480], [480, 320], [320, 240]]

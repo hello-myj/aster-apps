@@ -13,7 +13,11 @@ __attribute__((import_module("tyrian"),import_name("stack_get"))) uint32_t engin
 __attribute__((import_module("tyrian"),import_name("stack_set"))) void engine_stack_set(uint32_t);
 
 static _Alignas(16) uint8_t coroutine_stack[65536];
-static _Alignas(16) uint8_t engine_stack[262144];
+/* Both C stacks live inside the linker's auxiliary-stack region, so WAMR
+ * AOT's stack bounds checks remain enabled. Reserve 64 KiB above the engine
+ * for host callbacks; app.toml supplies another 256 KiB below it. A separate
+ * BSS array is outside that region and traps on the first AOT stack switch. */
+#define CALLBACK_STACK_BYTES 65536u
 static uint32_t engine_sp;
 static struct { uint32_t current, end; } coroutine;
 static uint32_t clock_ms, wake_ms, last_host, report_ms, presented;
@@ -50,7 +54,7 @@ ASTER_APP_EXPORT int aster_app_init(void) {
     int rc=tyrian_video_init();
     if(rc<0)return rc;
     last_host=aster_time_now_ms();report_ms=last_host;
-    engine_sp=(uint32_t)(uintptr_t)(engine_stack+sizeof(engine_stack));
+    engine_sp=(engine_stack_get()-CALLBACK_STACK_BYTES)&~15u;
     aster_printf("OpenTyrian original engine ac5d0e7; cooperative C/WASM");
     return aster_app_set_framerate(60);
 }

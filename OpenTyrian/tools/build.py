@@ -4,7 +4,7 @@ import argparse,os,pathlib,re,shutil,subprocess,sys
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 SDK=ROOT.parent.parent/'aster-sdk'
 p=argparse.ArgumentParser(description=__doc__)
-p.add_argument('--target',choices=['xtensa','riscv'],default='xtensa')
+p.add_argument('--target',choices=['xtensa','riscv'],default='riscv')
 p.add_argument('--aot',action='store_true')
 args=p.parse_args()
 workspace=pathlib.Path(os.environ.get('ASTER_WORKSPACE',ROOT))
