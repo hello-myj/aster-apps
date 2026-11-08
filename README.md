@@ -4,6 +4,8 @@ Aster 应用项目集合：一个应用对应一个独立文件夹，项目代�
 
 ## 当前项目
 
+- [PAL](PAL/README.md)：仙剑奇侠传完整引擎移植，ABI 4.3；P4 480×480 与 lckfb 320×240 的独立 AOT 包、简体文字、触屏操作和商城资源。
+
 - [StoreServer](StoreServer/README.md)：Python 本地应用分发服务器，支持程序与独立资源、硬件兼容过滤、摘要校验与分段下载。
 - [AppStore](AppStore/README.md)：设备端商城，ABI 4.3，目录、详情、下载、安装和打开应用。
 - [StoreDemo](StoreDemo/README.md)：商城安装验证，包含独立的 1 MiB 测试资源。

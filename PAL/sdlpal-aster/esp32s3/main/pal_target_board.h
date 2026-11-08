@@ -1,0 +1,50 @@
+#ifndef PAL_TARGET_BOARD_H
+#define PAL_TARGET_BOARD_H
+
+#if defined(PAL_TARGET_XIAOMIAO)
+
+#include "xiaomiao_board.h"
+#include "cardputer_extreme_native_view.h"
+
+#define PAL_TARGET_LCD_WIDTH XIAOMIAO_LCD_WIDTH
+#define PAL_TARGET_LCD_HEIGHT XIAOMIAO_LCD_HEIGHT
+#define PalTarget_Begin Xiaomiao_Begin
+#define PalTarget_MountTf Xiaomiao_MountTf
+#define PalTarget_PrepareTfAccess Xiaomiao_PrepareTfAccess
+#define PalTarget_ShowError Xiaomiao_ShowError
+#define PalTarget_PollKey Xiaomiao_PollKey
+#define PalTarget_FlushIndexedFramebuffer Xiaomiao_FlushIndexedFramebuffer
+#define PalTarget_FlushIndexedFramebufferRegion Xiaomiao_FlushIndexedFramebufferRegion
+#define PalTarget_NotifyPaletteChanged CardputerExtreme_NativeViewInvalidatePalette
+#define PalTarget_GuruMeditation Xiaomiao_GuruMeditation
+
+#elif defined(PAL_TARGET_CARDPUTER_ADV)
+
+#include "cardputer_extreme_board.h"
+#include "cardputer_extreme_native_view.h"
+
+#define PAL_TARGET_LCD_WIDTH CARDPUTER_EXTREME_LCD_WIDTH
+#define PAL_TARGET_LCD_HEIGHT CARDPUTER_EXTREME_LCD_HEIGHT
+#define PalTarget_Begin CardputerExtreme_Begin
+#define PalTarget_MountTf CardputerExtreme_MountTf
+#define PalTarget_PrepareTfAccess CardputerExtreme_PrepareTfAccess
+#define PalTarget_ShowError CardputerExtreme_ShowError
+#define PalTarget_PollKey CardputerExtreme_PollKey
+#define PalTarget_FlushIndexedFramebuffer CardputerExtreme_FlushIndexedFramebuffer
+#define PalTarget_FlushIndexedFramebufferRegion CardputerExtreme_FlushIndexedFramebufferRegion
+#define PalTarget_NotifyPaletteChanged CardputerExtreme_NativeViewInvalidatePalette
+
+#else
+
+#include "cores3se_board.h"
+
+#define PAL_TARGET_LCD_WIDTH CORES3SE_LCD_WIDTH
+#define PAL_TARGET_LCD_HEIGHT CORES3SE_LCD_HEIGHT
+#define PalTarget_Begin CoreS3Se_Begin
+#define PalTarget_MountTf CoreS3Se_MountTf
+#define PalTarget_PrepareTfAccess CoreS3Se_PrepareTfAccess
+#define PalTarget_ShowError CoreS3Se_ShowError
+
+#endif
+
+#endif

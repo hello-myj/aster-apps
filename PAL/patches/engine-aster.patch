@@ -1,0 +1,255 @@
+diff --git a/embedded/pal_level2_resident_pack.c b/embedded/pal_level2_resident_pack.c
+--- a/embedded/pal_level2_resident_pack.c
++++ b/embedded/pal_level2_resident_pack.c
+@@ -85,8 +85,12 @@
+    uint16_t archive_id,
+    uint16_t chunk_id)
+ {
+-   /* Native FONT10 supersedes the legacy DOS font in chunk zero. */
++   /* Select the font for this port without copying both into the resident owner. */
++#if defined(PAL_ASTER_FONT16)
++   return archive_id != PAL_PACK_ARCHIVE_FONT || chunk_id == 0u;
++#else
+    return archive_id != PAL_PACK_ARCHIVE_FONT || chunk_id == 1u;
++#endif
+ }
+ 
+ bool
+diff --git a/embedded/pal_native_ui.c b/embedded/pal_native_ui.c
+--- a/embedded/pal_native_ui.c
++++ b/embedded/pal_native_ui.c
+@@ -27,6 +27,11 @@
+     PalNativeUiDialogLayout *out)
+ {
+     const uint16_t margin = 4u;
++#if defined(PAL_ASTER_FONT16)
++    const uint16_t title_gap = PAL_NATIVE_UI_FONT_HEIGHT + 4u;
++#else
++    const uint16_t title_gap = 12u;
++#endif
+     const uint16_t line_height = PAL_NATIVE_UI_FONT_HEIGHT;
+     const uint16_t text_height = line_height * 4u;
+     uint16_t portrait_size;
+@@ -44,7 +49,7 @@
+     }
+     text_y = lower ?
+         (int16_t)(screen_height - margin - text_height) :
+-        (int16_t)(margin + 12u);
++        (int16_t)(margin + title_gap);
+ 
+     if (lower) {
+         out->portrait = local_rect(
+@@ -66,7 +71,7 @@
+                 text_height);
+         }
+         out->title_x = (int16_t)(has_portrait ? margin : margin + 8u);
+-        out->title_y = (int16_t)(text_y - 12);
++        out->title_y = (int16_t)(text_y - title_gap);
+     } else {
+         out->portrait = local_rect(
+             (int16_t)margin,
+diff --git a/embedded/pal_native_ui.h b/embedded/pal_native_ui.h
+--- a/embedded/pal_native_ui.h
++++ b/embedded/pal_native_ui.h
+@@ -7,8 +7,13 @@
+ 
+ #define PAL_NATIVE_UI_VIRTUAL_WIDTH 320u
+ #define PAL_NATIVE_UI_VIRTUAL_HEIGHT 200u
++#if defined(PAL_ASTER_FONT16)
++#define PAL_NATIVE_UI_FONT_WIDTH 12u
++#define PAL_NATIVE_UI_FONT_HEIGHT 12u
++#else
+ #define PAL_NATIVE_UI_FONT_WIDTH 10u
+ #define PAL_NATIVE_UI_FONT_HEIGHT 10u
++#endif
+ 
+ #ifdef __cplusplus
+ extern "C" {
+diff --git a/main.c b/main.c
+--- a/main.c
++++ b/main.c
+@@ -252,7 +252,12 @@
+ 
+    g_exit_code = exit_code;
+ #if !__EMSCRIPTEN__ && SDL_MAJOR_VERSION < 3
++#if defined(PAL_ASTER)
++   extern void PAL_AsterQuit(int);
++   PAL_AsterQuit(exit_code);
++#else
+    longjmp(g_exit_jmp_buf, 1);
++#endif
+ #else
+    SDL_Quit();
+    UTIL_Platform_Quit();
+@@ -857,6 +862,7 @@
+ #endif
+ 
+ #if !__EMSCRIPTEN__ && SDL_MAJOR_VERSION < 3
++#if !defined(PAL_ASTER)
+    if (setjmp(g_exit_jmp_buf) != 0)
+    {
+ 	   // A longjmp is made, should exit here
+@@ -864,6 +870,7 @@
+ 	   UTIL_Platform_Quit();
+ 	   return g_exit_code;
+    }
++#endif
+ #endif
+ 
+ #if !defined(UNIT_TEST) || defined(UNIT_TEST_GAME_INIT)
+diff --git a/unix/embedded_contract_stubs.c b/unix/embedded_contract_stubs.c
+--- a/unix/embedded_contract_stubs.c
++++ b/unix/embedded_contract_stubs.c
+@@ -11,6 +11,12 @@
+ #include "util.h"
+ #include "video.h"
+ #include "audio.h"
++#if defined(PAL_ASTER)
++#include "pal_aster_ui.h"
++#endif
++#if defined(PAL_ASTER_FONT16)
++#include "../embedded/pal_font_cache.h"
++#endif
+ #ifdef PAL_EXTREME_TWO_SCREENS
+ #include "../embedded/pal_font10_cache.h"
+ #include "../embedded/pal_native_ui.h"
+@@ -66,7 +72,11 @@
+ static PalPack pal_contract_tf_pack;
+ static PalTextCache pal_contract_text;
+ #ifdef PAL_EXTREME_TWO_SCREENS
++#if defined(PAL_ASTER_FONT16)
++static PalFontCache pal_contract_font;
++#else
+ static PalFont10Cache pal_contract_font10;
++#endif
+ static PalNativeUiDialogLayout pal_contract_dialog_layout;
+ #else
+ static PalFontCache pal_contract_font;
+@@ -284,7 +294,7 @@
+     return out;
+ }
+ 
+-#ifndef PAL_EXTREME_TWO_SCREENS
++#if !defined(PAL_EXTREME_TWO_SCREENS) || defined(PAL_ASTER_FONT16)
+ static void
+ PalContract_DrawGlyph16(
+     const uint8_t *glyph,
+@@ -476,7 +486,7 @@
+ int PAL_InitFont(const CONFIGURATION *cfg)
+ {
+     (void)cfg;
+-#ifdef PAL_EXTREME_TWO_SCREENS
++#if defined(PAL_EXTREME_TWO_SCREENS) && !defined(PAL_ASTER_FONT16)
+     pal_contract_font_ready = PalContract_OpenNorPack() &&
+         PalFont10_Open(&pal_contract_nor_pack, &pal_contract_font10) &&
+         pal_contract_font10.cell_width == 10u &&
+@@ -494,7 +504,7 @@
+ 
+ void PAL_DrawCharOnSurface(uint16_t wChar, SDL_Surface *lpSurface, PAL_POS pos, uint8_t bColor, BOOL fUse8x8Font)
+ {
+-#ifdef PAL_EXTREME_TWO_SCREENS
++#if defined(PAL_EXTREME_TWO_SCREENS) && !defined(PAL_ASTER_FONT16)
+     PalFont10Glyph glyph10;
+ 
+     (void)fUse8x8Font;
+@@ -527,7 +537,7 @@
+ 
+ int PAL_CharWidth(uint16_t wChar)
+ {
+-#ifdef PAL_EXTREME_TWO_SCREENS
++#if defined(PAL_EXTREME_TWO_SCREENS) && !defined(PAL_ASTER_FONT16)
+     PalFont10Glyph glyph10;
+     if (pal_contract_font_ready &&
+         PalFont10_FindGlyph(&pal_contract_font10, wChar, &glyph10)) {
+@@ -535,7 +545,11 @@
+     }
+     return PAL_NATIVE_UI_FONT_WIDTH;
+ #endif
++#if defined(PAL_ASTER_FONT16)
++    return (wChar < 0x80) ? PAL_NATIVE_UI_FONT_WIDTH / 2 : PAL_NATIVE_UI_FONT_WIDTH;
++#else
+     return (wChar < 0x80) ? 8 : 16;
++#endif
+ }
+ 
+ int PAL_FontHeight(void)
+@@ -683,12 +697,18 @@
+     while (*lpszText != 0) {
+         int x = PAL_X(pos);
+         int y = PAL_Y(pos);
++#if defined(PAL_ASTER)
++        if (!PalAsterUiGlyph(gpScreen,x,y,(uint16_t)*lpszText,bColor,fShadow)) {
++#endif
+         if (fShadow) {
+             PAL_DrawCharOnSurface((uint16_t)*lpszText, gpScreen, PAL_XY(x + 1, y), 0, fUse8x8Font);
+             PAL_DrawCharOnSurface((uint16_t)*lpszText, gpScreen, PAL_XY(x, y + 1), 0, fUse8x8Font);
+             PAL_DrawCharOnSurface((uint16_t)*lpszText, gpScreen, PAL_XY(x + 1, y + 1), 0, fUse8x8Font);
+         }
+         PAL_DrawCharOnSurface((uint16_t)*lpszText, gpScreen, pos, bColor, fUse8x8Font);
++#if defined(PAL_ASTER)
++        }
++#endif
+ #ifdef PAL_EXTREME_TWO_SCREENS
+         pos = PAL_XY(x + PAL_CharWidth((uint16_t)*lpszText), y);
+ #else
+diff --git a/ui.c b/ui.c
+--- a/ui.c
++++ b/ui.c
+@@ -20,6 +20,9 @@
+ //
+ 
+ #include "main.h"
++#if defined(PAL_ASTER)
++#include "pal_aster_ui.h"
++#endif
+ 
+ LPCSPRITE     gpSpriteUI = NULL;
+ 
+@@ -48,6 +51,13 @@
+       return FALSE;
+    }
+ 
++#if defined(PAL_ASTER)
++   if (fRestore) PalAsterUiCopy(dst,0,0,rect->w,rect->h,gpScreen->pixels,rect->x,rect->y);
++   else {
++      PalAsterUiForget(dst);
++      PalAsterUiCopy(gpScreen->pixels,rect->x,rect->y,rect->w,rect->h,dst,0,0);
++   }
++#endif
+    for (y = 0; y < rect->h; y++)
+    {
+       uint8_t *line = (uint8_t *)gpScreen->pixels + (rect->y + y) * gpScreen->pitch + rect->x;
+@@ -358,6 +368,9 @@
+       rect.y += PAL_RLEGetHeight(rglpBorderBitmap[m][0]);
+    }
+ 
++#if defined(PAL_ASTER)
++   PalAsterUiPanel(gpScreen,PAL_X(pos),PAL_Y(pos),rect.w-nShadowOffset,rect.y-PAL_Y(pos));
++#endif
+    return lpBox;
+ }
+ 
+@@ -528,6 +541,9 @@
+ 
+    PAL_RLEBlitToSurface(lpBitmapRight, gpScreen, PAL_XY(rect.x, rect.y));
+ 
++#if defined(PAL_ASTER)
++   PalAsterUiPanel(gpScreen,PAL_X(pos),PAL_Y(pos),rect.w-nShadowOffset,rect.h-nShadowOffset);
++#endif
+    return lpBox;
+ }
+ 
+diff --git a/rngplay.c b/rngplay.c
+--- a/rngplay.c
++++ b/rngplay.c
+@@ -505,6 +505,10 @@
+ --*/
+ {
+    uint32_t destination = 0u;
++#if defined(PAL_ASTER)
++   extern void PalAsterUiForget(const void *owner);
++   if (lpDstSurface) PalAsterUiForget(lpDstSurface->pixels);
++#endif
+ 
+    if (input == NULL || lpDstSurface == NULL ||
+       lpDstSurface->pixels == NULL || lpDstSurface->w <= 0 ||

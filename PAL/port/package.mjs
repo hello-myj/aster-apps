@@ -1,0 +1,30 @@
+import fs from 'node:fs';
+import crypto from 'node:crypto';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+const here=path.dirname(fileURLToPath(import.meta.url));
+const wasm=fs.readFileSync(path.join(here,'build/app.wasm'));
+const profile=JSON.parse(fs.readFileSync(path.join(here,'memory-profile.json'),'utf8'));
+const module=new WebAssembly.Module(wasm),imports={env:{}};
+for(const entry of WebAssembly.Module.imports(module))imports.env[entry.name]=()=>0;
+const instance=new WebAssembly.Instance(module,imports);
+if(instance.exports.memory.buffer.byteLength!==profile.linearBytes||Number(instance.exports.__heap_base.value)+64>profile.linearBytes)throw Error('Linked module does not fit the selected memory profile');
+const manifest={id:'com.example.palresearch',name:'仙剑 Aster 模拟验证',version:'0.11.1',abi:{min:'3.7',target:'3.7.0'},product:'aster',target_id:'xtensa',orientation:'landscape',requires:['display','touch'],optional:['audio-out'],permissions:['fs'],memory:{initial:profile.linearBytes,max:profile.linearBytes,stack:profile.stackBytes,heap:profile.surfaceHeapBytes},wasm_sha256:crypto.createHash('sha256').update(wasm).digest('hex')};
+const json=Buffer.from(JSON.stringify(manifest));
+const data=fs.readFileSync(path.join(here,'resources/pal_full.pak'));
+const assetName=Buffer.from('resources/pal_full.pak\0');
+const align=n=>(n+3)&~3;
+const assetData=align(28+assetName.length);
+const assets=Buffer.alloc(assetData+data.length);
+assets.write('ASTR');assets.writeUInt16LE(1,4);assets.writeUInt16LE(1,6);
+assets.writeUInt32LE(28,16);assets.writeUInt32LE(assetData,20);assets.writeUInt32LE(data.length,24);
+assetName.copy(assets,28);data.copy(assets,assetData);
+const mo=72,wo=align(mo+json.length),ao=align(wo+wasm.length);
+const pack=Buffer.alloc(ao+assets.length);
+pack.write('ASTP');pack.writeUInt16LE(1,4);pack.writeUInt16LE(72,6);pack.writeUInt32LE(4,8);
+for(const [at,off,len] of [[12,mo,json.length],[20,wo,wasm.length],[64,ao,assets.length]]){pack.writeUInt32LE(off,at);pack.writeUInt32LE(len,at+4);}
+json.copy(pack,mo);wasm.copy(pack,wo);assets.copy(pack,ao);
+fs.writeFileSync(path.join(here,'build/manifest.json'),JSON.stringify(manifest,null,2));
+fs.writeFileSync(path.join(here,'build/pal-research.ast'),pack);
+console.log(`Research container (${profile.linearBytes/1048576} MiB, simulator WASM build): ${pack.length} bytes`);
+

@@ -1,0 +1,23 @@
+schema = 1
+id = "aster.pal"
+
+[[variants]]
+target = "riscv"
+package = "dist/riscv/aster.pal.ast"
+resources = "dist/resources"
+boards = ["osptek-p4-st7102"]
+screens = [[480, 480]]
+
+[[variants]]
+target = "xtensa"
+package = "dist/xtensa/aster.pal.ast"
+resources = "dist/resources"
+boards = ["aster.esp32s3.lckfb"]
+screens = [[320, 240]]
+
+[[variants]]
+target = "wasm"
+package = "build/sim/dist/riscv/aster.pal.ast"
+resources = "dist/resources"
+boards = ["aster.simulator"]
+screens = [[480, 480], [320, 240]]

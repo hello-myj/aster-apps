@@ -1,0 +1,56 @@
+{
+  "schema": "sdlpal-embedded-pack-layout",
+  "version": 2,
+  "description": "MEM_LEVEL2 resident-view policy for the shared ESP32 TF datapak. pal_full.pak is the only TF payload pack. Xiaomiao reconstructs the selected long-lived pointer views in fixed mapped PSRAM at boot; the tf classification remains streamed or lifecycle-staged directly from pal_full.pak.",
+  "packs": {
+    "nor": [
+      "DATA",
+      "PAT",
+      "RGM",
+      "SSS",
+      "TEXT",
+      "FONT",
+      "MUS"
+    ],
+    "tf": [
+      "ABC",
+      "BALL",
+      "F",
+      "FBP",
+      "FIRE",
+      "GOP",
+      "MAP",
+      "MGO",
+      "MIDI",
+      "RNG",
+      "SFX"
+    ]
+  },
+  "chunk_selection": {
+    "nor": {
+      "DATA": { "all": true },
+      "PAT": { "all": true },
+      "RGM": { "all": true },
+      "SSS": { "all": true },
+      "TEXT": { "all": true },
+      "FONT": { "chunks": [1] },
+      "MUS": { "all": true }
+    },
+    "tf": {
+      "ABC": { "all": true },
+      "BALL": { "all": true },
+      "F": { "all": true },
+      "FBP": { "all": true },
+      "FIRE": { "all": true },
+      "GOP": { "all": true },
+      "MAP": { "all": true },
+      "MGO": { "all": true },
+      "MIDI": { "all": true },
+      "RNG": { "all": true },
+      "SFX": { "all": true }
+    }
+  },
+  "pack_limits": {
+    "nor": { "max_bytes": 2097152 }
+  }
+}

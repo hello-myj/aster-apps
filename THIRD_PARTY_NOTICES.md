@@ -80,3 +80,8 @@ and Binaryen retain their own licenses.
 OpenTyrian Chinese UI uses a bitmap subset of Noto Sans CJK SC 2.004,
 licensed under SIL Open Font License 1.1. Preserve
 OpenTyrian/vendor/licenses/Noto-OFL.txt with this font data.
+
+# PAL / 仙剑奇侠传
+
+`PAL/sdlpal-aster` 保存 sdlpal-embedded 的固定源码快照（`795fc8ae9133b020855f4ef5d44abef23b5f0fce`）及 Aster 兼容补丁，保留原许可证和作者记录。`PAL/pal-resources` 为用户旧项目所用 DOS 数据镜像的固定快照（`b6945a2a55717a76c7290fded90ad435acf598de`）；游戏数据来源与引擎代码许可分别处理。字体为 Fusion Pixel Font，OFL-1.1 文件和固定版本压缩包保存在项目内。详细来源及许可边界见 `PAL/UPSTREAM.md`。
+PAL 的 P4 原生 UI 字体由固定版本 Aster 18px cpfont 子集生成，基于 Droid Sans Fallback（Apache-2.0）与 DejaVu 拉丁字形（Bitstream Vera / DejaVu notices）。原始 bitmap 快照、摘要及许可保留在 `PAL/port/font-sources`。

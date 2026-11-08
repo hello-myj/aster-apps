@@ -8,7 +8,7 @@ import sys
 import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
-PROJECTS = ['OutRun', 'PixelWheels', 'GoldMiner', 'OpenOMF', 'OpenTyrian', 'TouchTest']
+PROJECTS = ['OutRun', 'PixelWheels', 'GoldMiner', 'OpenOMF', 'OpenTyrian', 'TouchTest', 'PAL']
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('projects', nargs='*', help=', '.join(PROJECTS))
 p.add_argument('--target', choices=['riscv', 'xtensa'], default='riscv')
@@ -22,7 +22,7 @@ for name in args.projects or PROJECTS:
     metadata = tomllib.loads((project / 'app.toml').read_text(encoding='utf-8-sig'))['app']
     workspace = project / 'build/sim' if args.no_aot else project
     env = os.environ | {'ASTER_WORKSPACE': str(workspace)}
-    if name == 'GoldMiner':
+    if name in ('GoldMiner', 'PAL'):
         cmd = [sys.executable, str(project / 'tools/build.py'), '--target', args.target]
         if args.no_aot:
             cmd.append('--no-aot')
@@ -34,6 +34,10 @@ for name in args.projects or PROJECTS:
         cmd = [sys.executable, str(sdk / 'tools/build.py'), str(project), '--target', args.target,
                '--no-aot' if args.no_aot else '--aot']
     subprocess.run(cmd, env=env, check=True)
+    if name == 'PAL':
+        subprocess.run([sys.executable,str(project/'tools/prepare_store.py')],check=True)
+        print(f'Built {name}: {workspace}/dist/{args.target}; resources: {project}/dist/resources',flush=True)
+        continue
     if name == 'GoldMiner':
         print(f'Built {name}: {workspace}/dist/{args.target}; resources: {project}/dist/{args.target}/resources',flush=True)
         continue

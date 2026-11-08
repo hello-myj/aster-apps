@@ -1,0 +1,8 @@
+build/
+resources/
+node_modules/
+sim-state/
+*.log
+undefined.txt
+
+/python-deps/

@@ -1,0 +1,55 @@
+cmake_minimum_required(VERSION 3.16)
+
+if(NOT DEFINED PAL_CORES3SE_ENGINE_HOST)
+    set(PAL_CORES3SE_ENGINE_HOST ON CACHE BOOL "Build the CoreS3 SE full-engine host")
+endif()
+
+if(NOT DEFINED CARDPUTER_EXTREME_NO_PSRAM)
+    set(CARDPUTER_EXTREME_NO_PSRAM OFF CACHE BOOL
+        "Build the Cardputer ADV 8MB/no-PSRAM/two-screen extreme profile")
+endif()
+
+if(NOT DEFINED CARDPUTER_EXTREME_MUSIC)
+    if(CARDPUTER_EXTREME_NO_PSRAM)
+        set(_CARDPUTER_EXTREME_MUSIC_DEFAULT ON)
+    else()
+        set(_CARDPUTER_EXTREME_MUSIC_DEFAULT OFF)
+    endif()
+    set(CARDPUTER_EXTREME_MUSIC ${_CARDPUTER_EXTREME_MUSIC_DEFAULT} CACHE BOOL
+        "Enable fixed-memory MUS/RIX background music on Cardputer ADV")
+endif()
+
+if(NOT DEFINED CARDPUTER_EXTREME_CHAPTER_CACHE)
+    set(CARDPUTER_EXTREME_CHAPTER_CACHE OFF CACHE BOOL
+        "Enable the TF-backed chapter overlay cache on Cardputer ADV")
+endif()
+
+if(NOT DEFINED XIAOMIAO_WROVER)
+    set(XIAOMIAO_WROVER OFF CACHE BOOL
+        "Build the Xueersi Xiaomiao ESP32-WROVER-B SD-only profile")
+endif()
+
+if(CARDPUTER_EXTREME_NO_PSRAM AND NOT PAL_CORES3SE_ENGINE_HOST)
+    message(FATAL_ERROR "CARDPUTER_EXTREME_NO_PSRAM requires PAL_CORES3SE_ENGINE_HOST=ON")
+endif()
+if(CARDPUTER_EXTREME_MUSIC AND NOT CARDPUTER_EXTREME_NO_PSRAM)
+    message(FATAL_ERROR "CARDPUTER_EXTREME_MUSIC requires CARDPUTER_EXTREME_NO_PSRAM=ON")
+endif()
+if(CARDPUTER_EXTREME_CHAPTER_CACHE AND NOT CARDPUTER_EXTREME_NO_PSRAM)
+    message(FATAL_ERROR "CARDPUTER_EXTREME_CHAPTER_CACHE requires CARDPUTER_EXTREME_NO_PSRAM=ON")
+endif()
+if(XIAOMIAO_WROVER AND CARDPUTER_EXTREME_NO_PSRAM)
+    message(FATAL_ERROR "XIAOMIAO_WROVER and CARDPUTER_EXTREME_NO_PSRAM are different boards")
+endif()
+if(XIAOMIAO_WROVER AND NOT PAL_CORES3SE_ENGINE_HOST)
+    message(FATAL_ERROR "XIAOMIAO_WROVER requires PAL_CORES3SE_ENGINE_HOST=ON")
+endif()
+
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+if(XIAOMIAO_WROVER)
+    project(sdlpal_xiaomiao)
+elseif(CARDPUTER_EXTREME_NO_PSRAM)
+    project(sdlpal_cardputer_extreme)
+else()
+    project(sdlpal_cores3se)
+endif()

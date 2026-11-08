@@ -1,0 +1,5 @@
+#ifndef PAL_OFFLINE_STRING_H
+#define PAL_OFFLINE_STRING_H
+/* The no-heap Adplug path only returns empty metadata strings. */
+namespace std { class string { public: string()=default; string(const char *) {} }; }
+#endif

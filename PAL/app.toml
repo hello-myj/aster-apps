@@ -1,0 +1,19 @@
+[app]
+id = "aster.pal"
+name = "仙剑奇侠传"
+description = "仙剑 DOS 原版引擎移植，简体文字、触屏操作与独立存档。"
+version = "0.13.0"
+abi = "4.3.0"
+abi_min = "4.3"
+orientation = "landscape"
+category = "game"
+icon = "assets/icon.bin"
+initial_memory = 5242880
+max_memory = 6291456
+stack = 65536
+heap = 786432
+requires = ["display", "touch", "filesystem"]
+optional = ["audio-out", "audio-effects"]
+permissions = ["fs"]
+sources = ["port/platform.c"]
+

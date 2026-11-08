@@ -1,0 +1,567 @@
+{
+  "schema": "sdlpal-embedded-pack-layout",
+  "version": 2,
+  "description": "Cardputer ADV 8MB/no-PSRAM legacy sparse-layout audit for the stock PALSteam/PAL_DOS data set. The shared pal_full.pak is the sole complete TF payload. Current chapter-cache firmware maps its bounded TOC from the SHA-verified NOR core and gives validated NOR core/overlay chunks precedence over duplicates. The sparse archive selections below remain regression inputs and closure documentation, not a second TF payload architecture or proof of a complete story route.",
+  "range_semantics": "All chunk ranges are inclusive [first, last].",
+  "packs": {
+    "nor": [
+      "ABC",
+      "BALL",
+      "DATA",
+      "F",
+      "FBP",
+      "FIRE",
+      "GOP",
+      "MAP",
+      "MGO",
+      "PAT",
+      "RGM",
+      "SSS",
+      "TEXT",
+      "FONT"
+    ],
+    "tf": [
+      "FBP",
+      "RNG"
+    ]
+  },
+  "tf_complete_mirror": {
+    "archives": [
+      "ABC",
+      "BALL",
+      "DATA",
+      "F",
+      "FBP",
+      "FIRE",
+      "GOP",
+      "MAP",
+      "MGO",
+      "MIDI",
+      "MUS",
+      "PAT",
+      "RGM",
+      "RNG",
+      "SSS",
+      "TEXT",
+      "FONT",
+      "SFX"
+    ],
+    "target_filename": "pal_full.pak",
+    "runtime_active": false,
+    "all_chunks": true,
+    "allow_overlap": true,
+    "index_strategy": "not-indexed-by-this-profile"
+  },
+  "profiles": {
+    "rix-music": {
+      "description": "Adds the complete MUS.MKF RIX/OPL2 background-music archive to the legacy sparse NOR pair. Original 88-slot numbering and the two source-empty slots are retained; MIDI, VOC, and SFX remain excluded from that sparse pair. The current default profile reads host-converted SFX from the complete pal_full.pak mirror.",
+      "pack_additions": {
+        "nor": {
+          "MUS": {
+            "all": true
+          }
+        },
+        "tf": {}
+      },
+      "music_audit": {
+        "format": "RIX/OPL2",
+        "source_archive": "MUS.MKF",
+        "source_chunk_count": 88,
+        "selected_payload_bytes": 330928,
+        "max_selected_track_bytes": 10108,
+        "empty_track_ids": [
+          0,
+          29
+        ],
+        "selected_track_ids": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68,
+          69,
+          70,
+          71,
+          72,
+          73,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85,
+          86,
+          87
+        ],
+        "excluded_audio_archives": [
+          "MIDI",
+          "VOC",
+          "SFX"
+        ],
+        "notes": "All 86 non-empty source tracks are present, including normal scene, menu, battle, victory, item-use, and save-import reachable music. Track IDs are not renumbered."
+      }
+    }
+  },
+  "chunk_selection": {
+    "nor": {
+      "ABC": {
+        "chunks": [
+          1,
+          2,
+          3,
+          6,
+          7,
+          18,
+          46,
+          57,
+          82,
+          87,
+          97,
+          100,
+          132
+        ]
+      },
+      "BALL": {
+        "all": true
+      },
+      "DATA": {
+        "all": true
+      },
+      "F": {
+        "ranges": [
+          [
+            0,
+            18
+          ]
+        ]
+      },
+      "FBP": {
+        "chunks": [
+          0,
+          60
+        ]
+      },
+      "FIRE": {
+        "ranges": [
+          [
+            0,
+            54
+          ]
+        ]
+      },
+      "GOP": {
+        "chunks": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          18,
+          19,
+          21,
+          22,
+          25,
+          119
+        ]
+      },
+      "MAP": {
+        "chunks": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          18,
+          19,
+          21,
+          22,
+          25,
+          119
+        ]
+      },
+      "MGO": {
+        "chunks": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          7,
+          8,
+          9,
+          10,
+          11,
+          13,
+          16,
+          18,
+          20,
+          21,
+          26,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          60,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68,
+          69,
+          75,
+          84,
+          86,
+          87,
+          88,
+          90,
+          96,
+          110,
+          121,
+          127,
+          140,
+          144,
+          148,
+          158,
+          160,
+          161,
+          162,
+          163,
+          164,
+          165,
+          166,
+          193,
+          194,
+          195,
+          196,
+          197,
+          207,
+          208,
+          210,
+          211,
+          212,
+          213,
+          214,
+          215,
+          222,
+          223,
+          224,
+          225,
+          226,
+          227,
+          228,
+          229,
+          230,
+          231,
+          232,
+          233,
+          239,
+          244,
+          317,
+          338,
+          339,
+          355,
+          361,
+          362,
+          363,
+          364,
+          365,
+          366,
+          367,
+          398,
+          423,
+          443,
+          462,
+          466,
+          468,
+          473,
+          525,
+          627,
+          628
+        ]
+      },
+      "PAT": {
+        "all": true
+      },
+      "RGM": {
+        "all": true
+      },
+      "SSS": {
+        "all": true
+      },
+      "TEXT": {
+        "all": true
+      },
+      "FONT": {
+        "chunks": [
+          1
+        ]
+      }
+    },
+    "tf": {
+      "FBP": {
+        "chunks": [
+          1,
+          3,
+          6,
+          8,
+          21
+        ]
+      },
+      "RNG": {
+        "chunks": [
+          1
+        ]
+      }
+    }
+  },
+  "pack_limits": {
+    "nor": {
+      "max_bytes": 7274496
+    }
+    },
+    "closure_audit": {
+        "status": "candidate-not-route-proven",
+        "known_unresolved_scene_destinations": [
+            21
+        ],
+        "chapter_complete_scene_destinations": [
+        ],
+        "known_unresolved_event_object_targets": [
+        ],
+        "supported_sparse_event_object_targets": [
+        ],
+        "known_unmodeled_script_root_classes": [
+            "item-use-equip-throw",
+            "magic-use-success",
+            "poison-player-dying-friend-death"
+        ],
+        "notes": "A conservative script traversal reaches scene 21 from selected scene 22, but this legacy sparse layout does not contain scene 21. The current complete pal_full.pak path and MEM_LEVEL1 chapter cache continue that transition by selecting the required bundle automatically. The selected stock PAL_DOS script closure has no out-of-prefix event-object target. Full intended-route and indirect object-script closure are still required before this profile can be called route-proven.",
+        "dataset": "/mnt/hgfs/deb13/PALSteam/PAL_DOS",
+    "scenes": {
+      "ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        22
+      ],
+      "map_chunks": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        18,
+        19,
+        21,
+        22,
+        25,
+        119
+      ],
+      "mgo_event_sprite_count": 114,
+      "mgo_extra_player_or_script_sprites": [
+        5,
+        26,
+        208,
+        228,
+        232,
+        361,
+        525,
+        627
+      ]
+    },
+    "battles": {
+      "reachable_team_ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        8,
+        9,
+        10,
+        11,
+        12,
+        15,
+        16,
+        17,
+        18,
+        19,
+        21,
+        22,
+        40
+      ],
+      "enemy_abc_chunks": [
+        1,
+        2,
+        3,
+        6,
+        7,
+        18,
+        46,
+        57,
+        82,
+        87,
+        97,
+        100,
+        132
+      ],
+      "policy": "All F and FIRE chunks are retained conservatively; ABC is closed over reachable teams. Battle/menu FBP is boundary-loaded from its selected NOR or TF chunk."
+    },
+    "excluded": {
+      "archives": [
+        "MIDI",
+        "MUS",
+        "VOC",
+        "SFX"
+      ],
+      "dos_splash_fbp_chunks": [
+        38,
+        39
+      ],
+      "dos_splash_mgo_chunks": [
+        71,
+        73
+      ]
+    }
+  }
+}
