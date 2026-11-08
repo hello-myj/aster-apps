@@ -5,6 +5,7 @@ const {Host}=require('../../../aster-sim/src/host'),{loadPackage}=require('../..
 const pkg=loadPackage(path.resolve(process.argv[2]||'AppStore/build/sim/xtensa/dist/xtensa/aster.store.ast'));
 const fixturePath=path.resolve(process.argv[3]||'StoreDemo/build/sim/dist/riscv/aster.store.demo.ast');
 const fixture=loadPackage(fixturePath),program=fs.readFileSync(fixturePath);
+let eofRaces=0;
 const resource=Buffer.alloc(65536,37),payloads=[program,resource],release='1'.repeat(64),id=fixture.manifest.id,version=fixture.manifest.version;
 let screens,board,target,hits;
 const server=http.createServer((req,res)=>{
@@ -19,6 +20,12 @@ const delay=()=>new Promise(r=>setTimeout(r,5));
  for(const [shape,expected,other] of [[[[320,240]],true,{}],[[[240,320]],true,{}],[[[480,320]],false,{}],[[[320,240]],false,{target:'xtensa'}],[[[320,240]],false,{board:'other.board'}]]){
   screens=shape;board=other.board||'aster.simulator';target=other.target||'wasm';hits=0;const catalog=[pkg],storage=new MemoryFS();
   const h=new Host(pkg,{width:240,height:320,network:true,noAudio:true,catalog,memoryStorage:storage});
+  // Force status lock contention immediately after successful EOF. read()==0
+  // already establishes completion; a redundant status query must not fail it.
+  const read=h.http.read.bind(h.http),status=h.http.status.bind(h.http);
+  let afterEof=false;
+  h.http.read=(...args)=>{const r=read(...args);afterEof=r===0;if(afterEof)eofRaces++;return r;};
+  h.http.status=(...args)=>{if(afterEof){afterEof=false;return -15;}return status(...args);};
   h.storageFs.writeFileSync(path.join(h.root,'kv',Buffer.from('store.url').toString('hex')),Buffer.from(`http://127.0.0.1:${server.address().port}\0`));
   try{h.start();for(let i=0;i<60;i++){h.tick();await delay();}h.input({type:'touch',action:1,x:210,y:94});h.input({type:'touch',action:3,x:210,y:94});
    const end=Date.now()+10000;while(Date.now()<end&&!h.pendingInstall&&!h.logs.some(x=>x.message.includes('STORE FAIL'))){h.tick();await delay();}
@@ -27,5 +34,6 @@ const delay=()=>new Promise(r=>setTimeout(r,5));
    else assert.equal(hits,0,'Rejected compatibility metadata must never start file downloads');
   }finally{h.stop();}
  }
- console.log('PASS portrait -> landscape download and install; wrong dimensions, board and architecture rejected');
+ assert(eofRaces>0,'Exercise EOF/status contention');
+ console.log('PASS EOF/status contention; portrait -> landscape download and install; wrong dimensions, board and architecture rejected');
 })().catch(e=>{console.error(e.stack);process.exitCode=1;}).finally(()=>{server.closeAllConnections();server.close();});

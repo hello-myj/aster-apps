@@ -307,7 +307,9 @@ static void network_tick(void)
         if(room>ASTER_HTTP_READ_LIMIT)room=ASTER_HTTP_READ_LIMIT;
         r=aster_http_read(request,buffer+(active==FILE_DATA?buffered:0),room);if(r==ASTER_EAGAIN)return;if(r<0){fail("下载中断，请重试",r);return;}
         if(!r) {
-            if(aster_http_status(request,&status,sizeof(status)) || status.state!=ASTER_HTTP_STATE_DONE){fail("下载尚未完成",ASTER_EPROTO);return;}
+            /* read()==0 is successful EOF by the HTTP ABI. A second,
+             * nonblocking status query can return EAGAIN even after EOF;
+             * treating that lock contention as failure rejects valid files. */
             closing=1;
             if(active==FILE_DATA) {
                 if((r=flush_download())){fail("SD 卡写入失败",r);return;}
