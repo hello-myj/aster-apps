@@ -3,7 +3,7 @@
 #include <aster_gfx_engine.h>
 #include "codec.h"
 #ifndef STORE_URL
-#define STORE_URL "http://127.0.0.1:9080"
+#define STORE_URL "https://github.com/hello-myj/aster-releases/releases/latest/download/aster-source.json"
 #endif
 #define PAGE 8
 #define PART (8u*1024u*1024u)
@@ -16,13 +16,14 @@ static aster_system_info_t device;
 static aster_handle_t surface,output;
 static aster_ge_t ge;static aster_gfx_cmd_t commands[128];static uint8_t arena[4096];
 static char server[192]=STORE_URL,edit[192],target[16],query[256],url[1024],headers[160];
+static char static_base[192];
 static char body[16384],status_line[128],stage[64],cleanup[64],local_file[160];
 static uint8_t buffer[8192];static unsigned buffered;static json_doc doc;
 static int request,closing,active,wanted,view,dirty=1,header_checked,icon_at;
 static uint32_t body_len,chunk_start,chunk_end,chunk_received,file_received,total_received,total_files,completed_files,last_draw;
 static store_sha256 checksum;
 enum { LIST,DETAIL,SETTINGS,DOWNLOAD,RESULT };
-enum { NONE,CATALOG,MANIFEST,FILE_DATA,ICON };
+enum { NONE,CATALOG,MANIFEST,FILE_DATA,ICON,SOURCE };
 static uint16_t ink,bg,muted,blue,white;
 static int text(int o,const char *key,char *p,size_t n){return json_string(&doc,json_key(&doc,o,key),p,n);}
 static int number(int o,const char *key,uint32_t *p){return json_uint(&doc,json_key(&doc,o,key),p);}
@@ -122,9 +123,23 @@ static void make_query(void)
         device.board,target,device.abi_version,(uint32_t)device.feature_flags,ge.w,ge.h);
 }
 static void refresh(void)
-{release_icons();entry_count=0;list_offset=0;catalog_page=0;catalog_total=0;catalog_ready=catalog_tail=0;view=LIST;wanted=CATALOG;message("正在获取兼容应用",0);}
+{release_icons();entry_count=0;list_offset=0;catalog_page=0;catalog_total=0;catalog_ready=catalog_tail=0;view=LIST;static_base[0]=0;size_t n=strlen(server);wanted=n>=5&&equals(server+n-5,".json")?SOURCE:CATALOG;message("正在获取兼容应用",0);}
+static int verify_metadata(int object,const entry *e);
+static int read_source(void)
+{
+    char kind[32],base[192];
+    if(text(0,"kind",kind,sizeof(kind))<0 || !equals(kind,"aster-static-source") ||
+       text(0,"base_url",base,sizeof(base))<0 || !valid_server(base) ||
+       (!strncmp(server,"https://",8)&&strncmp(base,"https://",8)))return -1;
+    copystr(static_base,base);wanted=CATALOG;return 0;
+}
 static int read_catalog(void)
 {
+    if(static_base[0]) {
+        char board[64],backend[24];
+        if(text(0,"board",board,sizeof(board))<0 || !equals(board,device.board) ||
+           text(0,"target",backend,sizeof(backend))<0 || !equals(backend,target))return -1;
+    }
     release_icons();
     int array=json_key(&doc,0,"items");if(array<0 || doc.tokens[array].type!='[' || doc.tokens[array].count>PAGE)return -1;
     entry_count=doc.tokens[array].count;int at=array+1;
@@ -135,6 +150,7 @@ static int read_catalog(void)
            text(at,"version",e->version,sizeof(e->version))<0 ||
            store_version_compare(e->version,e->version,&(int){0}) ||
            number(at,"bytes",&e->bytes) || number(at,"file_count",&e->count) || !e->count || e->count>4097)return -1;
+        if(static_base[0] && verify_metadata(at,e))return -1;
         if(text(at,"description",e->description,sizeof(e->description))<0)copystr(e->description,"此应用未提供简介。");
         int icon=json_key(&doc,at,"icon");
         if(icon>=0 && doc.tokens[icon].type=='{' &&
@@ -164,26 +180,26 @@ static int array_contains(int id,const char *value)
     if(id<0 || doc.tokens[id].type!='[')return 0;int at=id+1;
     for(int i=0;i<doc.tokens[id].count;i++){char s[96];if(json_string(&doc,at,s,sizeof(s))>=0 && equals(s,value))return 1;at=doc.tokens[at].next;}return 0;
 }
-static int verify_release(void)
+static int verify_metadata(int object,const entry *e)
 {
     char id[64],release[65],backend[24],version[24];
-    if(text(0,"id",id,sizeof(id))<0 || !equals(id,entries[selected].id) ||
-       text(0,"release",release,sizeof(release))<0 || !equals(release,entries[selected].release) ||
-       text(0,"version",version,sizeof(version))<0 || !equals(version,entries[selected].version) ||
-       text(0,"target",backend,sizeof(backend))<0 || !equals(backend,target) ||
-       !array_contains(json_key(&doc,0,"boards"),device.board))return -1;
-    int a=json_key(&doc,0,"abi_min");if(a<0 || doc.tokens[a].count!=3)return -1;
+    if(text(object,"id",id,sizeof(id))<0 || !equals(id,e->id) ||
+       text(object,"release",release,sizeof(release))<0 || !equals(release,e->release) ||
+       text(object,"version",version,sizeof(version))<0 || !equals(version,e->version) ||
+       text(object,"target",backend,sizeof(backend))<0 || !equals(backend,target) ||
+       !array_contains(json_key(&doc,object,"boards"),device.board))return -1;
+    int a=json_key(&doc,object,"abi_min");if(a<0 || doc.tokens[a].count!=3)return -1;
     uint32_t v[3];for(int i=0;i<3;i++)if(json_uint(&doc,a+1+i,&v[i]) || v[i]>255)return -1;
     uint32_t abi=(v[0]<<16)|(v[1]<<8)|v[2];
     if(v[0]!=(device.abi_version>>16) || abi>device.abi_version)return -1;
-    int screens=json_key(&doc,0,"screens");if(screens<0 || doc.tokens[screens].type!='[')return -1;
+    int screens=json_key(&doc,object,"screens");if(screens<0 || doc.tokens[screens].type!='[')return -1;
     if(doc.tokens[screens].count) {
         int fit=0,at=screens+1;
         for(int i=0;i<doc.tokens[screens].count;i++) {uint32_t w,h;if(doc.tokens[at].type!='[' || doc.tokens[at].count!=2 || json_uint(&doc,at+1,&w)||json_uint(&doc,at+2,&h))return -1;if((w==ge.w&&h==ge.h)||(w==ge.h&&h==ge.w))fit=1;at=doc.tokens[at].next;}
         if(!fit)return -1;
     }
     static const char *names[23]={"display","touch","mouse","keyboard","camera","audio-in","audio-out","wifi","bluetooth","accelerometer","gyroscope","filesystem","rtc","psram","framebuffer","network","http","tls","audio-stream","mqtt","websocket","audio-effects","audio-effects-memory"};
-    int needs=json_key(&doc,0,"requires");if(needs<0 || doc.tokens[needs].type!='[')return -1;
+    int needs=json_key(&doc,object,"requires");if(needs<0 || doc.tokens[needs].type!='[')return -1;
     int at=needs+1;
     for(int i=0;i<doc.tokens[needs].count;i++) {
         char name[32];if(json_string(&doc,at,name,sizeof(name))<0)return -1;int bit=-1;
@@ -193,6 +209,7 @@ static int verify_release(void)
     }
     return 0;
 }
+static int verify_release(void){return verify_metadata(0,&entries[selected]);}
 static void begin_file(void);
 static int read_manifest(void)
 {
@@ -259,15 +276,28 @@ static void begin_install(void)
 static int start_request(void)
 {
     headers[0]=0;body_len=0;header_checked=0;active=wanted;
-    if(active==CATALOG)aster_snprintf(url,sizeof(url),"%s/v1/catalog?%s&page=%d",server,query,catalog_page);
-    else if(active==MANIFEST)aster_snprintf(url,sizeof(url),"%s/v1/releases/%s?%s&page=%d",server,entries[selected].release,query,manifest_page);
-    else if(active==ICON)aster_snprintf(url,sizeof(url),"%s/v1/releases/%s/icon?%s",server,entries[icon_at].release,query);
+    if(active==SOURCE)copystr(url,server);
+    else if(active==CATALOG) {
+        if(static_base[0])aster_snprintf(url,sizeof(url),"%s/catalog-%s-%s-%d.json",static_base,device.board,target,catalog_page);
+        else aster_snprintf(url,sizeof(url),"%s/v1/catalog?%s&page=%d",server,query,catalog_page);
+    } else if(active==MANIFEST) {
+        if(static_base[0])aster_snprintf(url,sizeof(url),"%s/manifest-%s-%d.json",static_base,entries[selected].release,manifest_page);
+        else aster_snprintf(url,sizeof(url),"%s/v1/releases/%s?%s&page=%d",server,entries[selected].release,query,manifest_page);
+    } else if(active==ICON) {
+        if(static_base[0])aster_snprintf(url,sizeof(url),"%s/icon-%s.bmp",static_base,entries[icon_at].release);
+        else aster_snprintf(url,sizeof(url),"%s/v1/releases/%s/icon?%s",server,entries[icon_at].release,query);
+    }
     else {
         artifact *f=&files[file_at];chunk_start=file_received;chunk_end=f->bytes-1;
         if(chunk_end-chunk_start>=PART)chunk_end=chunk_start+PART-1;
         chunk_received=0;
-        aster_snprintf(url,sizeof(url),"%s/v1/releases/%s/files/%u?%s",server,entries[selected].release,f->index,query);
-        aster_snprintf(headers,sizeof(headers),"Range: bytes=%u-%u\r\nIf-Range: \"%s\"\r\n",chunk_start,chunk_end,f->sha);
+        if(static_base[0]) {
+            aster_snprintf(url,sizeof(url),"%s/blob-%s",static_base,f->sha);
+            aster_snprintf(headers,sizeof(headers),"Range: bytes=%u-%u\r\n",chunk_start,chunk_end);
+        } else {
+            aster_snprintf(url,sizeof(url),"%s/v1/releases/%s/files/%u?%s",server,entries[selected].release,f->index,query);
+            aster_snprintf(headers,sizeof(headers),"Range: bytes=%u-%u\r\nIf-Range: \"%s\"\r\n",chunk_start,chunk_end,f->sha);
+        }
     }
     int r=aster_http_request(ASTER_HTTP_METHOD_GET,url,strlen(url),headers[0]?headers:NULL,strlen(headers),NULL,0,active==ICON?10000:600000,active==FILE_DATA?PART:sizeof(body)-1);
     if(r==ASTER_EAGAIN){active=NONE;return 0;}if(r<0)return r;
@@ -284,6 +314,7 @@ static int check_headers(const aster_http_status_t *status)
     int r=aster_http_header(request,"Content-Range",13,0,got,sizeof(got)-1,&required);if(r<0)return r;got[r]=0;
     aster_snprintf(expected,sizeof(expected),"bytes %u-%u/%u",chunk_start,chunk_end,files[file_at].bytes);
     if(!equals(got,expected))return ASTER_EPROTO;
+    if(static_base[0])return 0; /* Opaque hosting ETag; SHA256 is verified for the whole file. */
     r=aster_http_header(request,"ETag",4,0,got,sizeof(got)-1,&required);if(r<0)return r;got[r]=0;
     aster_snprintf(expected,sizeof(expected),"\"%s\"",files[file_at].sha);return equals(got,expected)?0:ASTER_EPROTO;
 }
@@ -333,7 +364,7 @@ static void network_tick(void)
                 int kind=active;active=NONE;body[body_len]=0;
                 uint32_t schema;
                 if(json_parse(&doc,body,body_len) || number(0,"schema",&schema) || schema!=1 ||
-                   (kind==CATALOG?read_catalog():read_manifest()))fail("无效的商城数据",ASTER_ECORRUPT);
+                   (kind==SOURCE?read_source():kind==CATALOG?read_catalog():read_manifest()))fail("无效的商城数据",ASTER_ECORRUPT);
             }
             return;
         }

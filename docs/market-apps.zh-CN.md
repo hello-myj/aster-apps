@@ -70,3 +70,10 @@ OpenTyrian 的协程入口使用独立函数边界，防止引擎被合并进直
 P4 固件现已编译关闭解释器，安装与运行均强制匹配 AOT，不再默默回退。AOT 代码通过验证后的 PSRAM 指令映射执行，旧版 GoldMiner 0.1.5 和商城已完成实机执行验证；之前的内部 SRAM 分配限制会导致 AOT 加载失败。
 
 GoldMiner 0.2.0 也已发布 `xtensa` / `aster.esp32s3.lckfb` / 320×240 白名单变体；商城不会向 S3 提供 RISC-V 包。对应资源必须与程序一起安装。
+
+## GitHub 公共分发
+
+新增 `tools/prepare-publication.py`：构建两块板的商城和选定 APP，保留独立资源文件，
+输出供 GitHub Releases 托管的静态清单及内容寻址载荷。初始选定 APP 为 TouchTest；
+商城 0.2.0 同时接受本地服务器地址和 `aster-source.json` 静态入口。
+使用方法见 SDK `docs/github-distribution.md`，发布由 `aster-releases` Actions 完成。

@@ -13,7 +13,7 @@ project = Path(__file__).resolve().parents[1]
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument("--sdk", type=Path, default=project.parents[1] / "aster-sdk")
 p.add_argument("--target", choices=("riscv", "xtensa"), required=True)
-p.add_argument("--server-url", default="http://127.0.0.1:9080")
+p.add_argument("--server-url", default="https://github.com/hello-myj/aster-releases/releases/latest/download/aster-source.json")
 p.add_argument("--no-aot", action="store_true")
 a = p.parse_args()
 url = urlsplit(a.server_url)
