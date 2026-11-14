@@ -141,3 +141,29 @@ int store_version_compare(const char *a,const char *b,int *order)
     unsigned av[3],bv[3];if(!order||version_parts(a,av)||version_parts(b,bv))return -1;
     *order=0;for(unsigned i=0;i<3;i++)if(av[i]!=bv[i]){*order=av[i]>bv[i]?1:-1;break;}return 0;
 }
+
+static char *decimal(char *p,uint32_t value)
+{
+    char digits[10];unsigned n=0;
+    do{digits[n++]=(char)('0'+value%10);value/=10;}while(value);
+    while(n)*p++=digits[--n];
+    return p;
+}
+void store_format_bytes(uint32_t bytes,char output[32])
+{
+    uint32_t divisor=bytes>=1048576?1048576:bytes>=1024?1024:1;
+    char *p=decimal(output,bytes/divisor);
+    if(divisor>1){*p++='.';*p++=(char)('0'+((uint64_t)(bytes%divisor)*10/divisor));}
+    *p++=' ';if(divisor>1)*p++=divisor==1024?'K':'M';*p++='B';*p=0;
+}
+void store_rate_reset(store_rate *rate,uint32_t now,uint32_t bytes)
+{*rate=(store_rate){.sampled_ms=now,.sampled_bytes=bytes};}
+int store_rate_sample(store_rate *rate,uint32_t now,uint32_t bytes)
+{
+    uint32_t elapsed=now-rate->sampled_ms;
+    if(bytes<rate->sampled_bytes){store_rate_reset(rate,now,bytes);return 1;}
+    if(elapsed<1000)return 0;
+    uint64_t speed=(uint64_t)(bytes-rate->sampled_bytes)*1000/elapsed;
+    rate->bytes_per_second=speed>UINT32_MAX?UINT32_MAX:(uint32_t)speed;
+    rate->sampled_ms=now;rate->sampled_bytes=bytes;return 1;
+}

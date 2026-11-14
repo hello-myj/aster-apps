@@ -15,3 +15,9 @@ void sha_hex(store_sha256 *s,char output[65]);
 
 /* StoreServer numeric versions: major.minor[.patch], each component 0..255. */
 int store_version_compare(const char *a,const char *b,int *order);
+
+/* Binary 1024-based display units, labelled KB/MB in the UI. Output >=32 bytes. */
+void store_format_bytes(uint32_t bytes,char output[32]);
+typedef struct {uint32_t sampled_ms,sampled_bytes,bytes_per_second;} store_rate;
+void store_rate_reset(store_rate *rate,uint32_t now,uint32_t bytes);
+int store_rate_sample(store_rate *rate,uint32_t now,uint32_t bytes);

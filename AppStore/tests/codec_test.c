@@ -3,6 +3,17 @@
 #include "../src/codec.h"
 int main(void)
 {
+    char size[32];store_format_bytes(1048576,size);assert(!strcmp(size,"1.0 MB"));
+    store_format_bytes(1024,size);assert(!strcmp(size,"1.0 KB"));
+    store_format_bytes(0,size);assert(!strcmp(size,"0 B"));
+    store_format_bytes(UINT32_MAX,size);assert(!strcmp(size,"4095.9 MB"));
+    store_rate rate;store_rate_reset(&rate,100,0);
+    assert(!store_rate_sample(&rate,600,4096));
+    assert(store_rate_sample(&rate,1100,65536)&&rate.bytes_per_second==65536);
+    assert(store_rate_sample(&rate,3100,65536)&&!rate.bytes_per_second);
+    store_rate_reset(&rate,UINT32_MAX-499,0);
+    assert(store_rate_sample(&rate,500,1024)&&rate.bytes_per_second==1024);
+    assert(store_rate_sample(&rate,1600,0)&&!rate.bytes_per_second);
     int order;
     assert(!store_version_compare("1.10.0","1.9.9",&order)&&order>0);
     assert(!store_version_compare("1.2","1.2.0",&order)&&!order);

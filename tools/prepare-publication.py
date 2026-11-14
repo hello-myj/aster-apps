@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Build the free public channel and export immutable GitHub Release assets."""
 import argparse
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -18,9 +19,18 @@ def main():
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--repository', default='hello-myj/aster-releases')
     p.add_argument('--tag', required=True)
+    p.add_argument('--origin', help='HTTPS bucket origin instead of GitHub Releases')
     p.add_argument('--app', action='append', default=[])
+    p.add_argument('--catalog', type=Path, help='Complete public catalog JSON configuration')
     p.add_argument('--skip-build', action='store_true')
     a = p.parse_args();a.sdk=a.sdk.resolve();a.firmware=a.firmware.resolve();a.output=a.output.resolve()
+    selected=a.app or ['TouchTest']
+    if a.catalog:
+        if a.app:p.error('Use --catalog or --app, not both')
+        catalog=json.loads(a.catalog.read_bytes())
+        selected=catalog.get('apps')
+        if catalog.get('schema')!=1 or not isinstance(selected,list) or not selected or any(not isinstance(v,str) for v in selected):
+            p.error('Expected schema=1 and a nonempty apps list')
     if a.output.exists():p.error('Output exists; choose a new tag/output directory')
     work = a.output.parent/('input-'+a.tag)
     if work.exists():p.error('Staging input exists; choose a new tag/output directory')
@@ -28,7 +38,7 @@ def main():
     sys.path[:0] = [str(a.sdk/'tools'), str(ROOT)]
     import setup_server, static_distribution
     from StoreServer.server import publish, Store
-    channel = f'https://github.com/{a.repository}/releases/latest/download/aster-source.json'
+    channel = static_distribution.source_urls(a.repository, a.tag, a.origin)[1]
     profiles = [('riscv','osptek-p4-st7102',[480,480]),('xtensa','aster.esp32s3.lckfb',[240,320])]
     for target, board, screen in profiles:
         environment = dict(os.environ)
@@ -37,15 +47,20 @@ def main():
                             '--target',target,'--server-url',channel],env=environment,check=True)
         setup_server.publish(work/'setup',a.firmware/'resources/fonts',ROOT/f'AppStore/dist/{target}/aster.store.ast',
                              board,target,'1.1.0',channel,[screen])
-        for project in a.app or ['TouchTest']:
-            app=(ROOT/project).resolve(strict=True)
-            if not app.is_relative_to(ROOT):raise ValueError('APP project must be inside APPS')
+        for project in selected:
+            if project.startswith('sdk:'):
+                raise ValueError('Publication catalog accepts aster-apps projects only')
+            root=ROOT
+            app=(root/project).resolve(strict=True)
+            if not app.is_relative_to(root):raise ValueError('APP path leaves the allowed project root')
             config=tomllib.loads((app/'store.toml').read_text(encoding='utf-8-sig'))
             variants=[v for v in config['variants'] if v['target']==target and board in v['boards']]
             if not variants:continue
             if len(variants)!=1:raise ValueError('Ambiguous board/target variant')
             v=variants[0]
             if not a.skip_build:
+                if project=='StoreDemo':
+                    subprocess.run([sys.executable,str(app/'tools/prepare.py')],check=True)
                 subprocess.run([sys.executable,str(a.sdk/'tools/build.py'),str(app),'--target',target,'--aot'],
                                env=environment|{'ASTER_WORKSPACE':str(app)},check=True)
             package=(app/v['package']).resolve(strict=True)
@@ -64,9 +79,10 @@ def main():
         notices+=f'https://github.com/hello-myj/{name}/tree/{revision(root)}\n'
     for name,path in [('System font notices',a.firmware/'resources/fonts/NOTICE'),
                       ('DroidSansFallbackFull license',a.firmware/'resources/fonts/DroidSansFallbackFull.LICENSE'),
-                      ('APP license',ROOT/'LICENSE')]:
+                      ('APP license',ROOT/'LICENSE'),('SDK/sample license',a.sdk/'LICENSE'),
+                      ('SDK/sample notices',a.sdk/'NOTICE.md')]:
         notices+='\n\n'+name+'\n'+path.read_text(encoding='utf8')
-    print(static_distribution.export(work/'setup',work/'store',a.output,a.repository,a.tag,[b for _,b,_ in profiles],notices))
+    print(static_distribution.export(work/'setup',work/'store',a.output,a.repository,a.tag,[b for _,b,_ in profiles],notices,origin=a.origin))
 
 
 if __name__=='__main__':main()

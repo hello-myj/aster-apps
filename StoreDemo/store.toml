@@ -9,6 +9,13 @@ boards = ["osptek-p4-st7102"]
 screens = [[480, 480]]
 
 [[variants]]
+target = "xtensa"
+package = "dist/xtensa/aster.store.demo.ast"
+resources = "dist/resources"
+boards = ["aster.esp32s3.lckfb"]
+screens = [[240, 320]]
+
+[[variants]]
 target = "wasm"
 package = "build/sim/dist/riscv/aster.store.demo.ast"
 resources = "dist/resources"

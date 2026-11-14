@@ -22,10 +22,10 @@ function shot(h,name){fs.writeFileSync(path.join(out,name+'.png'),h.screen.toBuf
    assert.notDeepEqual(h.screen.toBuffer('image/png'),catalogImage,'Settings must open after the catalog request finishes');
    if(height<300){
     // Clear, type, delete, type: saving an invalid URL must stay on settings.
-    tap(h,260,171);await frames(h);const empty=h.screen.toBuffer('image/png');
-    tap(h,18,93);await frames(h);assert.notDeepEqual(h.screen.toBuffer('image/png'),empty,'Typing edits the URL');
-    tap(h,150,171);await frames(h);assert.deepEqual(h.screen.toBuffer('image/png'),empty,'Delete removes the typed character');
-    tap(h,18,93);await frames(h);const invalid=h.screen.toBuffer('image/png');
+    tap(h,280,198);await frames(h);const empty=h.screen.toBuffer('image/png');
+    tap(h,18,98);await frames(h);assert.notDeepEqual(h.screen.toBuffer('image/png'),empty,'Typing edits the URL');
+    tap(h,220,198);await frames(h);assert.deepEqual(h.screen.toBuffer('image/png'),empty,'Delete removes the typed character');
+    tap(h,18,98);await frames(h);const invalid=h.screen.toBuffer('image/png');
     tap(h,210,bottom+18);await frames(h);shot(h,'320-keyboard');
     assert.deepEqual(h.screen.toBuffer('image/png'),invalid,'Invalid URL cannot be saved');
     assert.ok(!h.pendingInstall);

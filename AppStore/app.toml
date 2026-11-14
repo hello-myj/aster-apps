@@ -2,7 +2,7 @@
 id = "aster.store"
 name = "Aster 商城"
 description = "按设备兼容性浏览、下载和安装应用及资源。"
-version = "0.2.0"
+version = "0.3.1"
 orientation = "landscape"
 icon = "assets/icon.bin"
 abi = "4.3.0"
@@ -19,4 +19,4 @@ permissions = ["net", "fs", "kv", "appmgr"]
 sources = ["src/main.c", "src/codec.c"]
 
 [build]
-defines = ['STORE_URL="https://github.com/hello-myj/aster-releases/releases/latest/download/aster-source.json"']
+defines = ['STORE_URL="https://aster-releases.obs.cn-south-1.myhuaweicloud.com/aster-source.json"']

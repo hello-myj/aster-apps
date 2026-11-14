@@ -7,13 +7,16 @@ import re
 import shutil
 import subprocess
 import sys
+import tomllib
 from urllib.parse import urlsplit
 
 project = Path(__file__).resolve().parents[1]
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument("--sdk", type=Path, default=project.parents[1] / "aster-sdk")
 p.add_argument("--target", choices=("riscv", "xtensa"), required=True)
-p.add_argument("--server-url", default="https://github.com/hello-myj/aster-releases/releases/latest/download/aster-source.json")
+defaults = tomllib.loads((project / 'app.toml').read_text(encoding='utf-8-sig'))['build']['defines']
+default_url = json.loads(next(value.split('=', 1)[1] for value in defaults if value.startswith('STORE_URL=')))
+p.add_argument("--server-url", default=default_url, help="Override STORE_URL from app.toml")
 p.add_argument("--no-aot", action="store_true")
 a = p.parse_args()
 url = urlsplit(a.server_url)

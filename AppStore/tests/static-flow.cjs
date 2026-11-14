@@ -24,13 +24,14 @@ const delay=()=>new Promise(r=>setTimeout(r,5));
 const tap=(h,x,y)=>{h.input({type:'touch',action:1,x,y});h.input({type:'touch',action:3,x,y});};
 (async()=>{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));base=`http://127.0.0.1:${server.address().port}`;
- for(mode of ['good','wrong-board','corrupt']){
+ for(mode of ['good','good-legacy-url','good-busy','wrong-board','corrupt']){
   hits=0;const catalog=[pkg],memoryStorage=new MemoryFS();const h=new Host(pkg,{width:480,height:480,network:true,noAudio:true,catalog,memoryStorage});
-  h.storageFs.writeFileSync(path.join(h.root,'kv',Buffer.from('store.url').toString('hex')),Buffer.from(base+'/aster-source.json\0'));
+  if(mode==='good-busy'){const open=h.netabi.open.bind(h.netabi);let attempts=0;h.netabi.open=(...args)=>++attempts<=3?[-5,-11,-15][attempts-1]:open(...args);}
+  h.storageFs.writeFileSync(path.join(h.root,'kv',Buffer.from('store.url').toString('hex')),Buffer.from(base+'/aster-source.json'+(mode==='good-legacy-url'?'':'\0')));
   try{
    h.start();for(let i=0;i<80;i++){h.tick();await delay();}tap(h,425,135);
    const end=Date.now()+15000;while(Date.now()<end&&!h.pendingInstall&&!h.logs.some(x=>x.message.includes('STORE FAIL'))){h.tick();await delay();}
-   if(mode==='good'){assert(h.pendingInstall,JSON.stringify(h.logs));assert.equal(hits,2);h.stop();h.completeInstall();assert.deepEqual(catalog.find(x=>x.manifest.id===app.manifest.id).assets.get('pattern.bin'),resource);}
+   if(mode.startsWith('good')){assert(h.pendingInstall,JSON.stringify(h.logs));assert.equal(hits,2);h.stop();h.completeInstall();assert.deepEqual(catalog.find(x=>x.manifest.id===app.manifest.id).assets.get('pattern.bin'),resource);}
    else{assert(!h.pendingInstall);assert(h.logs.some(x=>x.message.includes('STORE FAIL')),JSON.stringify(h.logs));assert.equal(hits,mode==='wrong-board'?0:2);}
   }finally{h.stop();}
  }
