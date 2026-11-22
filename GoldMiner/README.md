@@ -1,5 +1,7 @@
 # 黄金矿工 / GoldMiner 0.2.0
 
+2026-11-22 的[公网商城快照](https://github.com/hello-myj/aster-releases/blob/main/docs/obs-distribution.md)中，鱼鹰光电 P4C5 和立创实战派均为 0.2.0，点击画面操作，保留透明 MENU。
+
 同一份原生 C 游戏源码支持立创 ESP32-S3（320×240）与当前 OSPTEK ESP32-P4（480×480）。设备分别使用 Xtensa、RISC-V AOT；安装包不跨 CPU 通用。没有 Lua 虚拟机或 LÖVE 运行时。
 
 游戏保持原来的 320×240 逻辑坐标：lckfb 原尺寸显示，P4 等比放大到 480×360 并居中，上下留白每帧清空。无底部虚拟按键栏，只保留右上角半透明 MENU。素材分别从原图直接生成 1 倍和 1.5 倍版本，字体按目标尺寸栅格化，不再把 1.2 倍图片二次放大。

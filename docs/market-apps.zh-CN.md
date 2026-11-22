@@ -19,7 +19,7 @@
 python tools/build-market.py OutRun PixelWheels GoldMiner OpenOMF OpenTyrian TouchTest
 ```
 
-输出为各工程 `dist/riscv/<APP ID>.ast` 和 `dist/resources`；GoldMiner 的素材按 CPU 分开，使用 `dist/<target>/resources`。素材准备失败时不要发布残缺目录。模拟器版本单独运行 `--no-aot`，输出到各工程 `build/sim/dist/riscv`，保留实机 AOT。
+未指定架构时上述命令构建 RISC-V 包；立创版本需为支持该板的项目另行传 `--target xtensa` 并准备其资源。输出路径按项目 `store.toml` 选择，一般为 `dist/<target>/<APP ID>.ast` 和 `dist/resources`；GoldMiner 的素材按 CPU 分开，使用 `dist/<target>/resources`。素材准备失败时不要发布残缺目录。模拟器版本单独运行 `--no-aot`，输出到各工程 `build/sim/dist/riscv`，保留实机 AOT。
 
 ```sh
 python tools/build-market.py OutRun PixelWheels GoldMiner OpenOMF OpenTyrian TouchTest --no-aot

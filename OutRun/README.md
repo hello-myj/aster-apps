@@ -1,5 +1,7 @@
 # OutRun 重制版 → Aster 4.1，0.5.1
 
+2026-11-22 的[公网商城快照](https://github.com/hello-myj/aster-releases/blob/main/docs/obs-distribution.md)中，鱼鹰光电 P4C5 和立创实战派均为 0.5.1；鱼鹰使用触摸方向盘，立创使用 IMU 转向及左右半屏刹车、油门。
+
 实机商城适用设备为鱼鹰 P4C5 和立创实战派。构建、资源路径和发布步骤见 [商城应用构建](../docs/market-apps.zh-CN.md)。旧版手工 SD 部署说明不适用于新的 `/assets` 资源布局。
 
 由当前模型重新移植，参照 ZgzInfinity/OutRun 重制版。本版保留原赛道逐段高程与曲率、双路车道宽度、场景对象布置和轴点、车辆方向/坡度/制动/碰撞帧，并将绘图替换为 Aster RGB565 软件渲染。0.1 试版保留在 legacy-prototype/。

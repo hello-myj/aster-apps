@@ -15,3 +15,5 @@ exact input and subsets the game FONT corpus, without consulting host fonts.
 Chinese ink retains the 18px grid; wide Latin ink is area-sampled into PAL's
 nine-pixel half-width cell. U+2027 uses the face's middle dot; U+2500 is an
 explicit centered horizontal stroke. Output ui18.bin contains 4-bit coverage.
+
+The OSPTEK target uses the native text layer and the LCKFB target uses Fusion Pixel. Font conversion inputs and notices travel with the port. [Display paths and build](../../README.md)

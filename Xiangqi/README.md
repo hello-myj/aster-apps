@@ -20,7 +20,7 @@ aster build . --target xtensa --aot
 ```
 
 输出为 `dist/riscv/aster.xiangqi.ast` 和 `dist/xtensa/aster.xiangqi.ast`。
-用 SDK 串口安装工具安装对应架构的包，或通过模拟器 `--profile p4/lckfb --app <工程目录>` 启动。
+用 SDK 串口安装工具安装对应架构的包，或通过模拟器 `--profile osptek-p4 --app <工程目录>` 或 `--profile lckfb-s3 --app <工程目录>` 启动。
 
 ## 验证
 

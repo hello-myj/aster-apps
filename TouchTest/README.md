@@ -1,5 +1,7 @@
 # 多指触控测试
 
+2026-11-22 的[公网商城快照](https://github.com/hello-myj/aster-releases/blob/main/docs/obs-distribution.md)中，三块板均为 1.0.1，触点数量以各板输入驱动上报值为准。
+
 实机商城适用设备为鱼鹰 P4C5、立创实战派和 FAKE POD NANO PRO。构建、资源路径和发布步骤见 [商城应用构建](../docs/market-apps.zh-CN.md)。无需独立资源文件。
 
 独立项目，APP ID `aster.touchtest`，SDK ABI 4.1，Xtensa AOT，480×320 横屏优先，按运行时实际尺寸绘制。不依赖 SD 外部资源，不需要网络、音频或文件权限。

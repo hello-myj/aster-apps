@@ -1,5 +1,7 @@
 # 本地应用分发服务器
 
+本地调试在 APPS 仓库根目录运行 `python -m StoreServer serve`。设备访问电脑的局域网地址。公网设备则通过 OBS 读取预先导出的静态文件，分发服务器无需长期运行。[线上分发流程](https://github.com/hello-myj/aster-releases/blob/main/docs/obs-distribution.md)
+
 商城图标：目录条目可带 `icon: {bytes, sha256}`，没有图标时为 `null`。`GET /v1/releases/<release>/icon` 按相同设备兼容规则返回 48×48 BMP，并提供 ETag。服务器直接读取已发布 ASTP 中的 ASTI（I1/A8/RGB565/RGB565A8），保留宽高比并将透明部分合成到白色底。缩略图是派生展示数据，不修改已发布包、资源或 release ID，也不计入安装包体积；旧客户端可忽略该字段。整个服务仍仅依赖 Python 标准库。
 
 在 APPS 仓库根目录运行，使用 Python 3.11 或更新版本，无第三方依赖。服务端代码可用于 Windows、Linux、macOS；Windows 和 WSL/Linux 已通过 HTTP 接口测试，macOS 尚未实际验证。
@@ -45,7 +47,7 @@ verified = { version = "0.2.1", boards = ["aster.esp32s3.lckfb"] }
 
 设备商城复核元数据并流式校验文件，下载完整后请求固件安装。代码与资源一起写入非活动版本目录，成功后切换活动版本。失败保留原应用；用户数据不随更新删除。
 
-HTTP 服务只读，没有远程上传或发布入口。当前用于可信局域网，SHA-256 用于完整性校验；硬件参数匹配也不等于设备身份认证。公网阶段应部署生产 HTTP 前端、HTTPS、可信签名和发布权限策略，并配置限流。Python 官方也明确说明 [http.server 不适合生产部署](https://docs.python.org/3/library/http.server.html)。
+HTTP 服务只读，没有远程上传或发布入口。当前用于可信局域网，SHA-256 用于完整性校验；硬件参数匹配也不等于设备身份认证。当前公网商城将清单和资源导出到 OBS，使用 HTTPS 提供只读下载。发布步骤见[静态分发指南](https://github.com/hello-myj/aster-releases/blob/main/docs/obs-distribution.md)。Python 官方也明确说明 [http.server 不适合生产部署](https://docs.python.org/3/library/http.server.html)。
 
 ## 验证
 

@@ -1,5 +1,7 @@
 # Pixel Wheels → Aster：移植版 0.2.1
 
+2026-11-22 的[公网商城快照](https://github.com/hello-myj/aster-releases/blob/main/docs/obs-distribution.md)中，鱼鹰光电 P4C5 和立创实战派均为 0.2.1，按屏幕尺寸使用独立触控布局。
+
 0.2.0 同时提供 P4（480×480 / RISC-V AOT）与 lckfb（320×240 / Xtensa AOT）商城版本。画布使用硬件原生分辨率，菜单、选图、选车和暂停页随屏幕布局；不使用 IMU 或方向盘。
 
 - P4：上方 480×360 游戏区，下方独立操作区；左侧左右转向按钮，右侧油门/刹车，中间 TURBO。默认手动油门。

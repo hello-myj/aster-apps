@@ -1,5 +1,7 @@
 # 仙剑奇侠传 · Aster PAL
 
+公开商城当前分别提供鱼鹰 P4C5 的 0.13.0 和立创实战派的 0.12.3。选择安装包时也要使用其配套的 `resources` 与 `audio`；商城会一起安装。下面的原生文本绘制参数对应鱼鹰版。[各板发布记录](https://github.com/hello-myj/aster-releases/blob/main/docs/obs-distribution.md)
+
 由旧 pal 0.11.x 工程迁入当前 APPS，应用 ID 为 `aster.pal`，版本 0.13.0，ABI 4.3。保留真实 PAL 引擎、完整 DOS 数据、简体文本；P4 使用独立的原生 UI 字体，lckfb 保留 Fusion Pixel 12px 字体。
 
 - P4 / ST7102：480×480、RISC-V AOT；上方场景以最近邻像素风缩放到 480×300，文字用独立 18px 字形在目标像素网格绘制，菜单面板单独绘制，下方独立操作区。
