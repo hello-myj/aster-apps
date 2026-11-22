@@ -106,12 +106,18 @@ static enum page motion_origin = PLAYBACK;
 static enum lyric_effect motion_effect = LYRIC_EFFECT_COUNT;
 static uint32_t motion_began;
 static bool motion_leaving, motion_transition;
-static bool imu_available;
+static bool has_accelerometer, imu_available;
+static struct {
+    bool armed;
+    int x, y;
+    uint32_t released;
+} lyric_tap;
 static shake_t shake;
 static uint32_t shake_after, imu_sequence, imu_retry_at;
 
 static struct {
-    bool down, moved, rejected, page_swipe;
+    bool down, moved, rejected, page_swipe, tap_candidate;
+    uint32_t pressed;
     int x, y, control;
 } finger;
 
@@ -643,6 +649,7 @@ static void set_page(enum page target)
 {
     if (page == target)
         return;
+    lyric_tap.armed = false;
     if (page == PAPER || target == PAPER) {
         uint32_t now = aster_time_now_ms();
         memset(&shake, 0, sizeof(shake));
@@ -675,6 +682,27 @@ static enum lyric_effect pick_lyric_effect(uint32_t now, uint32_t sequence)
     return (enum lyric_effect)((motion_effect + step) % LYRIC_EFFECT_COUNT);
 }
 
+static void toggle_motion(uint32_t now, uint32_t sequence)
+{
+    if (page != PAPER) {
+        motion_origin = page;
+        motion_effect = pick_lyric_effect(now, sequence);
+        set_page(PAPER);
+        paper_line = -2; /* Prepare the opening frame even during a lyric gap. */
+        paper_style = paper_previous = (unsigned)motion_effect * LYRIC_VARIANTS;
+    } else {
+        motion_leaving = true;
+    }
+    motion_began = now;
+    motion_transition = true;
+    shake_after = now + LYRIC_ENTER_MS;
+    shake.wait_for_rest = true;
+    shake.last_sample = now;
+    shake.rest_ms = 0;
+    dirty = true;
+    aster_printf("HiFi lyric motion effect=%u return=%u", (unsigned)motion_effect, motion_leaving);
+}
+
 static void shake_poll(uint32_t now)
 {
     if (motion_leaving || finger.down || (!imu_available && (int32_t)(now - imu_retry_at) < 0))
@@ -697,23 +725,7 @@ static void shake_poll(uint32_t now)
     imu_sequence = sample.sequence;
     if (!shake_update(&shake, sample.accel, now) || (int32_t)(now - shake_after) < 0)
         return;
-    if (page != PAPER) {
-        motion_origin = page;
-        motion_effect = pick_lyric_effect(now, sample.sequence);
-        set_page(PAPER);
-        paper_line = -2; /* Prepare the opening frame even during a lyric gap. */
-        paper_style = paper_previous = (unsigned)motion_effect * LYRIC_VARIANTS;
-    } else {
-        motion_leaving = true;
-    }
-    motion_began = now;
-    motion_transition = true;
-    shake_after = now + LYRIC_ENTER_MS;
-    shake.wait_for_rest = true;
-    shake.last_sample = now;
-    shake.rest_ms = 0;
-    dirty = true;
-    aster_printf("HiFi lyric shake effect=%u return=%u", (unsigned)motion_effect, motion_leaving);
+    toggle_motion(now, sample.sequence);
 }
 
 static const char *source_label(void)
@@ -1534,6 +1546,7 @@ static void touch(const aster_event_t *event)
     int x = ((int)event->u.touch.x - left) * DESIGN / (int)content_w;
     int y = ((int)event->u.touch.y - top) * DESIGN / (int)content_h;
     uint32_t action = event->u.touch.action;
+    uint32_t at = (uint32_t)event->timestamp_ms;
     if (action == ASTER_TOUCH_DOWN) {
         finger.down = true;
         finger.moved = finger.rejected = false;
@@ -1542,6 +1555,11 @@ static void touch(const aster_event_t *event)
         finger.control = hit(x, y);
         finger.page_swipe =
             page_swipe_area(y) && finger.control != VOLUME && finger.control != DEMO;
+        finger.pressed = at;
+        finger.tap_candidate = !has_accelerometer && (page == LYRICS || page == PAPER) &&
+                               !motion_leaving && finger.control == NONE && finger.page_swipe;
+        if (!finger.tap_candidate)
+            lyric_tap.armed = false;
         if (finger.control == SEEK)
             slider(SEEK, x);
         dirty = true;
@@ -1563,6 +1581,7 @@ static void touch(const aster_event_t *event)
             dirty = true;
         }
         finger.moved = true;
+        lyric_tap.armed = false;
     }
     if (action == ASTER_TOUCH_MOVE) {
         if (is_slider && !finger.rejected && finger.moved)
@@ -1573,6 +1592,21 @@ static void touch(const aster_event_t *event)
         return;
     finger.down = false;
     finger.control = NONE;
+    if (finger.tap_candidate && finger.page_swipe && !finger.moved && at - finger.pressed <= 260) {
+        if (lyric_tap.armed && finger.pressed - lyric_tap.released <= 350 &&
+            abs_i(x - lyric_tap.x) <= 24 && abs_i(y - lyric_tap.y) <= 24) {
+            lyric_tap.armed = false;
+            toggle_motion(aster_time_now_ms(), at);
+        } else {
+            lyric_tap.armed = true;
+            lyric_tap.x = x;
+            lyric_tap.y = y;
+            lyric_tap.released = at;
+        }
+        dirty = true;
+        return;
+    }
+    lyric_tap.armed = false;
     if (is_slider && !finger.rejected) {
         slider(id, x);
         if (id == SEEK && seeking == SEEK_DRAG) {
@@ -1619,6 +1653,7 @@ static void poll(uint32_t now)
             queued_file[0] = 0;
             start_busy = false;
             seeking = SEEK_IDLE;
+            lyric_tap.armed = false;
             finger.down = false;
             finger.control = NONE;
         }
@@ -1679,6 +1714,7 @@ ASTER_APP_EXPORT int aster_app_init(void)
     scan_start();
     automatic_next();
     sync_media();
+    has_accelerometer = aster_system_has_feature(ASTER_FEATURE_ACCELEROMETER) > 0;
     imu_retry_at = aster_time_now_ms();
     aster_app_set_framerate(30);
     dirty = true;
@@ -1693,7 +1729,8 @@ ASTER_APP_EXPORT void aster_app_event(const aster_event_t *event)
     if (event->type == ASTER_EVENT_FRAME) {
         uint32_t now = aster_time_now_ms();
         poll(now);
-        shake_poll(now);
+        if (has_accelerometer)
+            shake_poll(now);
         scan_tick();
         lyrics_tick(now);
         paper_tick(now);
@@ -1715,14 +1752,20 @@ ASTER_APP_EXPORT void aster_app_event(const aster_event_t *event)
             draw(now);
             dirty = false;
         }
-    } else if (event->type == ASTER_EVENT_TOUCH && event->u.touch.slot == 0)
-        touch(event);
-    else if (event->type == ASTER_EVENT_KEY && event->u.key.pressed && event->u.key.code == 1)
+    } else if (event->type == ASTER_EVENT_TOUCH) {
+        if (event->u.touch.slot == 0)
+            touch(event);
+        else if (event->u.touch.action == ASTER_TOUCH_DOWN) {
+            lyric_tap.armed = false;
+            finger.tap_candidate = false;
+        }
+    } else if (event->type == ASTER_EVENT_KEY && event->u.key.pressed && event->u.key.code == 1)
         aster_app_exit(0);
 }
 
 ASTER_APP_EXPORT void aster_app_pause(void)
 {
+    lyric_tap.armed = false;
     memset(&finger, 0, sizeof(finger));
     memset(&shake, 0, sizeof(shake));
     seeking = SEEK_IDLE;

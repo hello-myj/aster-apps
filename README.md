@@ -6,7 +6,7 @@ Aster 应用项目集合：一个应用对应一个独立文件夹，项目代�
 
 商城按设备上报的板型、AOT 架构、ABI、能力和屏幕筛选版本。鱼鹰光电 P4C5 与 FAKE POD NANO PRO 同为 RISC-V，商城仍使用各自的板型 ID。
 
-- [Aster 音乐](HiFiPlayer/README.md) 面向 FAKE POD NANO PRO 的 460×460 方屏。支持 MP3、WAV、FLAC、本地与手机蓝牙播放，以及三种全屏动态歌词。需要固件 ABI 4.5 和 `media-player` 服务。
+- [Aster 音乐](HiFiPlayer/README.md) 支持鱼鹰光电 P4C5 和 FAKE POD NANO PRO 的方屏、本地音乐和三种全屏动态歌词。鱼鹰在歌词页双击切换，FAKE POD 支持摇一摇和蓝牙音频。需要固件 ABI 4.5 和 `media-player` 服务。
 - [楚河·中国象棋](Xiangqi/README.md)、[黄金矿工](GoldMiner/README.md) 和 [仙剑奇侠传](PAL/README.md) 提供鱼鹰 P4C5 和立创 ESP32-S3 实战派两个架构的商城包。
 - [OutRun](OutRun/README.md) 和 [Pixel Wheels](PixelWheels/README.md) 同时支持这两块板。OutRun 在立创板可用倾斜转向，Pixel Wheels 使用屏幕按键。
 - [OpenOMF](OpenOMF/README.md) 和 [OpenTyrian](OpenTyrian/README.md) 的实机商城版本面向鱼鹰 P4C5，分别针对方屏设计格斗和射击操作区。

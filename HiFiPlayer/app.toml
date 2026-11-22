@@ -2,7 +2,7 @@
 id = "aster.hifi"
 name = "Aster 音乐"
 description = "滑动切换播放、同步歌词和曲库，支持本地音乐与蓝牙音频。"
-version = "0.4.27"
+version = "0.4.28"
 abi = "4.5.0"
 abi_min = "4.5"
 aot = true
@@ -14,13 +14,14 @@ initial_memory = 1048576
 max_memory = 2097152
 heap = 524288
 requires = ["display", "touch", "media-player"]
-supported_boards = ["fakepod-s31"]
+supported_boards = ["fakepod-s31", "osptek-p4-st7102"]
 permissions = ["fs"]
 sources = ["src/main.c", "src/lrc.c", "src/flac_lyrics.c", "src/cover.c", "src/cover_jpeg.c",
            "vendor/tjpgd/tjpgd.c", "src/paper.c", "src/paper_font.c", "src/lyric_layout.c", "src/shake.c"]
 icon = "icon.bin"
 assets = [
     "audio/demo.flac",
+    "audio/demo.lrc",
     "art/moonlight.bmp",
     "text/gbk.bin",
     "text/paper-serif.bin",

@@ -7,7 +7,10 @@
 #include <stdio.h>
 #include <string.h>
 
-enum { SIDE = 460 };
+#ifndef TEST_SCREEN_SIZE
+#define TEST_SCREEN_SIZE 460
+#endif
+enum { SIDE = TEST_SCREEN_SIZE };
 static FILE *asset;
 static uint16_t frame[SIDE * SIDE], expected[SIDE * SIDE];
 static unsigned partial_frames, system_text_frames;

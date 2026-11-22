@@ -4,6 +4,6 @@ id = "aster.hifi"
 [[variants]]
 target = "riscv"
 package = "dist/riscv/aster.hifi.ast"
-boards = ["fakepod-s31"]
+boards = ["fakepod-s31", "osptek-p4-st7102"]
 verified = { version = "0.4.27", boards = ["fakepod-s31"] }
-screens = [[460, 460]]
+screens = [[460, 460], [480, 480]]

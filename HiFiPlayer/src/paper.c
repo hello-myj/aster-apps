@@ -546,7 +546,8 @@ static void stamp(const canvas_t *canvas, paper_mask_t mask, float x, float y, f
     float c = cosine(angle), s = sine(angle);
     int du = (int)(c * ratio), dv = (int)(s * ratio);
     int half = (int)((c + (s < 0 ? -s : s)) * em * PAPER_FONT_CELL / (2 * PAPER_FONT_EM)) + 2;
-    int first_x = max(canvas->x0, (int)x - half), last_x = min(canvas->x1, (int)x + half);
+    int glyph_x = max(0, (int)x - half);
+    int first_x = max(canvas->x0, glyph_x), last_x = min(canvas->x1, (int)x + half);
     int first_y = max(canvas->y0, (int)y - half), last_y = min(canvas->y1, (int)y + half);
     if (first_x >= last_x || first_y >= last_y)
         return;
@@ -561,9 +562,11 @@ static void stamp(const canvas_t *canvas, paper_mask_t mask, float x, float y, f
         edge = 0;
 
     for (int row = first_y; row < last_y; row++) {
-        int dx = first_x * FP - mid_x, dy = row * FP - mid_y;
-        int u = origin + (dx * du + dy * dv) / FP;
-        int v = origin + (dy * du - dx * dv) / FP;
+        /* Anchor the fixed-point rounding at the same pixel for full and dirty frames. */
+        int dx = glyph_x * FP - mid_x, dy = row * FP - mid_y;
+        int skipped = first_x - glyph_x;
+        int u = origin + (dx * du + dy * dv) / FP + skipped * du;
+        int v = origin + (dy * du - dx * dv) / FP - skipped * dv;
         uint16_t *pixel = canvas->pixels + row * canvas->stride + first_x;
         for (int col = first_x; col < last_x; col++, u += du, v -= dv, pixel++) {
             if (u < 0 || v < 0 || u >= (cell - 1) * FP || v >= (cell - 1) * FP)
