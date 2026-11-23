@@ -4,6 +4,8 @@ Aster 应用项目集合：一个应用对应一个独立文件夹，项目代�
 
 ## 应用与支持设备
 
+- [录音机](VoiceRecorder/README.md) 使用 ABI 4.6 连续麦克风接口，将 WAV 写入 SD 卡并支持回听。
+
 商城按设备上报的板型、AOT 架构、ABI、能力和屏幕筛选版本。鱼鹰光电 P4C5 与 FAKE POD NANO PRO 同为 RISC-V，商城仍使用各自的板型 ID。
 
 - [Aster 音乐](HiFiPlayer/README.md) 支持鱼鹰光电 P4C5 和 FAKE POD NANO PRO 的方屏、本地音乐和三种全屏动态歌词。鱼鹰在歌词页双击切换，FAKE POD 支持摇一摇和蓝牙音频。需要固件 ABI 4.5 和 `media-player` 服务。

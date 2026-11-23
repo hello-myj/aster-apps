@@ -1,0 +1,21 @@
+[app]
+id = "aster.recorder"
+name = "录音机"
+description = "连续录音，保存到 SD 卡，随时回听。"
+version = "0.1.0"
+abi = "4.6.0"
+abi_min = "4.6"
+aot = true
+optimize = "Os"
+orientation = "portrait"
+category = "tool"
+stack = 16384
+initial_memory = 786432
+max_memory = 1572864
+heap = 524288
+requires = ["display", "touch", "audio-in", "audio-out", "filesystem"]
+permissions = ["fs", "sd"]
+sources = ["src/main.c"]
+
+[sdk]
+target = "riscv"
