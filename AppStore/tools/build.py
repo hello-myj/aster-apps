@@ -30,7 +30,8 @@ manifest = (project / "app.toml").read_text(encoding="utf-8-sig")
 if a.target == "xtensa":
     manifest = re.sub(r"heap = \d+", "heap = 393216", manifest)
     manifest = manifest.replace('orientation = "landscape"', 'orientation = "portrait"')
-manifest = re.sub(r"defines = \[.*\]", "defines = ['STORE_URL=" + json.dumps(a.server_url.rstrip('/')) + "']", manifest)
+defines = [f'STORE_URL={json.dumps(a.server_url.rstrip("/"))}', f'STORE_UPDATE_URL={json.dumps(default_url)}']
+manifest = re.sub(r"defines = \[.*\]", "defines = [" + ", ".join(repr(d) for d in defines) + "]", manifest)
 (configured / "app.toml").write_text(manifest, encoding="utf-8")
 environment = os.environ | {"ASTER_WORKSPACE": str(project / "build/sim" / a.target if a.no_aot else project)}
 cmd = [sys.executable, str(a.sdk.resolve() / "tools/build.py"), str(configured), "--target", a.target, "--no-aot" if a.no_aot else "--aot"]

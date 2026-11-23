@@ -5,6 +5,9 @@
 #ifndef STORE_URL
 #error "Configure STORE_URL in app.toml or tools/build.py"
 #endif
+#ifndef STORE_UPDATE_URL
+#define STORE_UPDATE_URL STORE_URL
+#endif
 #define PAGE 8
 #define PART (8u * 1024u * 1024u)
 
@@ -52,9 +55,34 @@ static uint32_t body_len, chunk_start, chunk_end, chunk_received, file_received,
     total_files, completed_files, last_draw;
 static store_sha256 checksum;
 
-enum { LIST, DETAIL, SETTINGS, DOWNLOAD, RESULT };
+enum { LIST, DETAIL, SETTINGS, DOWNLOAD, RESULT, STORE_UPDATE };
 
-enum { NONE, CATALOG, MANIFEST, FILE_DATA, ICON, SOURCE };
+enum { NONE, CATALOG, MANIFEST, FILE_DATA, ICON, SOURCE, UPDATE_SOURCE, UPDATE_PLAN,
+       UPDATE_ARTIFACT, UPDATE_PREFIX };
+
+/* A public catalog can be user-configured; only the built-in release channel
+ * and its board-specific bootstrap package may replace the Store itself. */
+static char update_base[192], update_release[65], local_version[24], prefix_digest[65];
+static artifact update_file;
+static char remote_version[24];
+static int update_available, self_install;
+static unsigned update_index;
+static const unsigned prefix_limit = 4096;
+
+static uint32_t download_bytes(void)
+{
+    return self_install ? update_file.bytes : entries[selected].bytes;
+}
+
+static const char *download_name(void)
+{
+    return self_install ? "Aster 商城" : entries[selected].name;
+}
+
+static const char *package_leaf(void)
+{
+    return self_install ? "store-update.ast" : "package.ast";
+}
 
 static uint16_t ink, bg, muted, blue, white;
 
@@ -276,6 +304,13 @@ static void stop_network(void)
 
 static void fail(const char *s, int error)
 {
+    if (view == STORE_UPDATE) {
+        stop_network();
+        update_available = 0;
+        message(s, error);
+        aster_logf(ASTER_LOG_WARN, "STORE update check: %s (%d)", s, error);
+        return;
+    }
     if (active == ICON) {
         entries[icon_at].icon_state = 3;
         stop_network();
@@ -346,6 +381,7 @@ static void make_query(void)
 
 static void refresh(void)
 {
+    self_install = 0;
     release_icons();
     entry_count = 0;
     list_offset = 0;
@@ -371,6 +407,118 @@ static int read_source(void)
         return -1;
     copystr(static_base, base);
     wanted = CATALOG;
+    return 0;
+}
+
+static void check_store_update(void)
+{
+    stop_network();
+    view = STORE_UPDATE;
+    self_install = update_available = 0;
+    local_version[0] = remote_version[0] = 0;
+    dirty = 1;
+    int count = aster_appmgr_count();
+    for (int i = 0; i < count; i++) {
+        aster_app_info_t info = {.size = sizeof(info), .version = 2};
+        if (aster_appmgr_list(i, &info, sizeof(info)))
+            break;
+        if (equals(info.id, "aster.store")) {
+            memcpy(local_version, info.app_version, sizeof(local_version) - 1);
+            local_version[sizeof(local_version) - 1] = 0;
+            break;
+        }
+    }
+    if (!local_version[0]) {
+        message("无法读取本机商城版本", ASTER_EIO);
+        return;
+    }
+    copystr(status_line, "正在检查商城版本…");
+    wanted = UPDATE_SOURCE;
+}
+
+static uint32_t little32(const char *p)
+{
+    const uint8_t *b = (const uint8_t *)p;
+    return b[0] | (uint32_t)b[1] << 8 | (uint32_t)b[2] << 16 | (uint32_t)b[3] << 24;
+}
+
+static int array_contains(int id, const char *value);
+static int supported_requirements(int needs);
+
+static int read_update_version(void)
+{
+    if (body_len != chunk_end + 1 || body_len < 64 || memcmp(body, "ASTP", 4) ||
+        (uint8_t)body[4] != 1 || body[5])
+        return -1;
+    unsigned header = (uint8_t)body[6] | (unsigned)(uint8_t)body[7] << 8;
+    uint32_t offset = little32(body + 12), length = little32(body + 16);
+    if (header < 64 || offset < header || offset > body_len || !length || length > body_len - offset)
+        return -1;
+    char id[64], arch[24], minimum[24], current_abi[24];
+    int order;
+    aster_snprintf(current_abi, sizeof(current_abi), "%u.%u.%u", device.abi_version >> 16,
+                   device.abi_version >> 8 & 255, device.abi_version & 255);
+    if (json_parse(&doc, body + offset, length) ||
+        text(0, "id", id, sizeof(id)) < 0 || !equals(id, "aster.store") ||
+        text(0, "target_id", arch, sizeof(arch)) < 0 || !equals(arch, target) ||
+        text(json_key(&doc, 0, "abi"), "min", minimum, sizeof(minimum)) < 0 ||
+        store_version_compare(minimum, current_abi, &order) || order > 0 ||
+        supported_requirements(json_key(&doc, 0, "requires")) ||
+        text(0, "version", remote_version, sizeof(remote_version)) < 0 ||
+        store_version_compare(remote_version, local_version, &order))
+        return -1;
+    int boards = json_key(&doc, 0, "supported_boards");
+    if (boards >= 0 && (doc.tokens[boards].type != '[' ||
+        (doc.tokens[boards].count && !array_contains(boards, device.board))))
+        return -1;
+    store_sha256 prefix;
+    sha_init(&prefix);
+    sha_update(&prefix, body, body_len);
+    sha_hex(&prefix, prefix_digest);
+    update_available = order > 0;
+    copystr(status_line, order > 0 ? "有新版本可更新" : order < 0 ? "本机版本较新" : "已是最新版本");
+    aster_logf(ASTER_LOG_INFO, "STORE self-update local=%s remote=%s available=%d",
+               local_version, remote_version, update_available);
+    dirty = 1;
+    return 0;
+}
+
+static int read_update_metadata(int kind)
+{
+    char value[96];
+    if (kind == UPDATE_SOURCE) {
+        if (text(0, "kind", value, sizeof(value)) < 0 || !equals(value, "aster-static-source") ||
+            text(0, "base_url", update_base, sizeof(update_base)) < 0 || !valid_server(update_base) ||
+            strncmp(update_base, "https://", 8))
+            return -1;
+        wanted = UPDATE_PLAN;
+    } else if (kind == UPDATE_PLAN) {
+        uint32_t count, abi, features, w, h;
+        if (text(0, "board", value, sizeof(value)) < 0 || !equals(value, device.board) ||
+            text(0, "target", value, sizeof(value)) < 0 || !equals(value, target) ||
+            number(0, "abi_min", &abi) || abi >> 16 != device.abi_version >> 16 ||
+            abi > device.abi_version || number(0, "features", &features) ||
+            (features & ~device.feature_flags) || number(0, "width", &w) || number(0, "height", &h) ||
+            !((w == ge.w && h == ge.h) || (w == ge.h && h == ge.w)) ||
+            number(0, "files", &count) || count < 1 || count > 128 ||
+            text(0, "release", update_release, sizeof(update_release)) < 0 || !hex64(update_release))
+            return -1;
+        /* Schema 2 places the Store after the font objects. */
+        update_index = count - 1;
+        wanted = UPDATE_ARTIFACT;
+    } else {
+        uint32_t index;
+        if (number(0, "index", &index) || index != update_index ||
+            text(0, "kind", value, sizeof(value)) < 0 || !equals(value, "store") ||
+            text(0, "path", value, sizeof(value)) < 0 || !equals(value, "store/package.ast") ||
+            number(0, "bytes", &update_file.bytes) || update_file.bytes < 64 ||
+            text(0, "sha256", update_file.sha, sizeof(update_file.sha)) < 0 || !hex64(update_file.sha) ||
+            text(0, "url", value, sizeof(value)) < 0 || strncmp(value, "blob-", 5) ||
+            !equals(value + 5, update_file.sha))
+            return -1;
+        update_file.package = 1;
+        wanted = UPDATE_PREFIX;
+    }
     return 0;
 }
 
@@ -517,6 +665,11 @@ static int verify_metadata(int object, const entry *e)
         if (!fit)
             return -1;
     }
+    return supported_requirements(json_key(&doc, object, "requires"));
+}
+
+static int supported_requirements(int needs)
+{
     static const char *names[] = {"display",
                                   "touch",
                                   "mouse",
@@ -541,7 +694,6 @@ static int verify_metadata(int object, const entry *e)
                                   "audio-effects",
                                   "audio-effects-memory",
                                   [ASTER_FEATURE_MEDIA_PLAYER] = "media-player"};
-    int needs = json_key(&doc, object, "requires");
     if (needs < 0 || doc.tokens[needs].type != '[')
         return -1;
     int at = needs + 1;
@@ -637,19 +789,24 @@ static void file_done(void)
         wanted = MANIFEST;
         return;
     }
-    if (completed_files != total_files || total_received != entries[selected].bytes) {
+    if (completed_files != total_files || total_received != download_bytes()) {
         fail("资源清单不完整", ASTER_ECORRUPT);
         return;
     }
     char package[96], assets[96];
-    aster_snprintf(package, sizeof(package), "%s/package.ast", stage);
+    aster_snprintf(package, sizeof(package), "%s/%s", stage, package_leaf());
     aster_snprintf(assets, sizeof(assets), "%s/assets", stage);
     message("正在安装，完成后返回商城", 0);
     view = RESULT;
     draw();
-    int r = aster_appmgr_install(package, strlen(package), assets, strlen(assets));
-    if (r)
+    int r = self_install ? aster_kv_set("store.self.version", 18, remote_version, strlen(remote_version) + 1) : 0;
+    if (!r)
+        r = aster_appmgr_install(package, strlen(package), assets, strlen(assets));
+    if (r) {
+        if (self_install)
+            aster_kv_delete("store.self.version", 18);
         fail("无法提交安装", r);
+    }
 }
 
 static void begin_file(void)
@@ -658,7 +815,7 @@ static void begin_file(void)
     file_received = 0;
     sha_init(&checksum);
     int n = f->package
-                ? aster_snprintf(local_file, sizeof(local_file), "%s/package.ast", stage)
+                ? aster_snprintf(local_file, sizeof(local_file), "%s/%s", stage, package_leaf())
                 : aster_snprintf(local_file, sizeof(local_file), "%s/assets/%s", stage, f->path);
     if (n < 0 || n >= (int)sizeof(local_file)) {
         fail("资源路径过长", ASTER_EINVAL);
@@ -684,15 +841,13 @@ static void begin_file(void)
 
 static void begin_install(void)
 {
-    if (!can_install(&entries[selected]))
+    self_install = view == STORE_UPDATE;
+    if (self_install ? !update_available : !can_install(&entries[selected]))
         return;
     buffered = 0;
     if (cleanup[0] || network_busy() || wanted)
         return;
-    if (equals(entries[selected].id, "aster.store")) {
-        message("商城自身更新请使用设备维护工具", ASTER_ENOTSUP);
-        return;
-    }
+    view = DOWNLOAD;
     uint32_t nonce = aster_time_now_ms();
     aster_stat_t st = {.size = sizeof(st), .version = 1};
     int unique = 0;
@@ -720,12 +875,18 @@ static void begin_install(void)
         return;
     }
     total_received = completed_files = 0;
-    total_files = entries[selected].count;
+    total_files = self_install ? 1 : entries[selected].count;
     store_rate_reset(&download_rate, aster_time_now_ms(), 0);
     manifest_page = 0;
-    view = DOWNLOAD;
-    wanted = MANIFEST;
     message("正在下载并校验资源", 0);
+    if (self_install) {
+        files[0] = update_file;
+        file_at = 0;
+        file_count = 1;
+        manifest_next = -1;
+        begin_file();
+    } else
+        wanted = MANIFEST;
 }
 
 static int start_request(void)
@@ -736,6 +897,18 @@ static int start_request(void)
     active = wanted;
     if (active == SOURCE)
         copystr(url, server);
+    else if (active == UPDATE_SOURCE)
+        copystr(url, STORE_UPDATE_URL);
+    else if (active == UPDATE_PLAN)
+        aster_snprintf(url, sizeof(url), "%s/setup-%s-%s.json", update_base, device.board, target);
+    else if (active == UPDATE_ARTIFACT)
+        aster_snprintf(url, sizeof(url), "%s/setup-%s-%u.json", update_base, update_release, update_index);
+    else if (active == UPDATE_PREFIX) {
+        chunk_start = 0;
+        chunk_end = (update_file.bytes < prefix_limit ? update_file.bytes : prefix_limit) - 1;
+        aster_snprintf(url, sizeof(url), "%s/blob-%s", update_base, update_file.sha);
+        aster_snprintf(headers, sizeof(headers), "Range: bytes=0-%u\r\n", chunk_end);
+    }
     else if (active == CATALOG) {
         if (static_base[0])
             aster_snprintf(url, sizeof(url), "%s/catalog-%s%s-%s-%d.json", static_base,
@@ -764,8 +937,8 @@ static int start_request(void)
         if (chunk_end - chunk_start >= PART)
             chunk_end = chunk_start + PART - 1;
         chunk_received = 0;
-        if (static_base[0]) {
-            aster_snprintf(url, sizeof(url), "%s/blob-%s", static_base, f->sha);
+        if (self_install || static_base[0]) {
+            aster_snprintf(url, sizeof(url), "%s/blob-%s", self_install ? update_base : static_base, f->sha);
             aster_snprintf(headers, sizeof(headers), "Range: bytes=%u-%u\r\n", chunk_start,
                            chunk_end);
         } else {
@@ -807,7 +980,7 @@ static int check_headers(const aster_http_status_t *status)
                        status->content_length == entries[icon_at].icon_bytes
                    ? 0
                    : ASTER_EPROTO;
-    if (active != FILE_DATA)
+    if (active != FILE_DATA && active != UPDATE_PREFIX)
         return status->status == 200 ? 0 : ASTER_EPROTO;
     if (status->status != 206 || !(status->flags & ASTER_HTTP_FLAG_LENGTH) ||
         status->content_length != chunk_end - chunk_start + 1)
@@ -819,10 +992,10 @@ static int check_headers(const aster_http_status_t *status)
         return r;
     got[r] = 0;
     aster_snprintf(expected, sizeof(expected), "bytes %u-%u/%u", chunk_start, chunk_end,
-                   files[file_at].bytes);
+                   active == UPDATE_PREFIX ? update_file.bytes : files[file_at].bytes);
     if (!equals(got, expected))
         return ASTER_EPROTO;
-    if (static_base[0])
+    if (static_base[0] || self_install || active == UPDATE_PREFIX)
         return 0; /* Opaque hosting ETag; SHA256 is verified for the whole file. */
     r = aster_http_header(request, "ETag", 4, 0, got, sizeof(got) - 1, &required);
     if (r < 0)
@@ -915,6 +1088,10 @@ static void network_tick(void)
                     file_done();
                 else
                     wanted = FILE_DATA;
+            } else if (active == UPDATE_PREFIX) {
+                active = NONE;
+                if (read_update_version())
+                    fail("商城安装包版本无效", ASTER_ECORRUPT);
             } else if (active == ICON) {
                 entry *e = &entries[icon_at];
                 char digest[65];
@@ -968,8 +1145,9 @@ static void network_tick(void)
                 body[body_len] = 0;
                 uint32_t schema;
                 if (json_parse(&doc, body, body_len) || number(0, "schema", &schema) ||
-                    schema != 1 ||
-                    (kind == SOURCE    ? read_source()
+                    schema != (kind == UPDATE_PLAN ? 2u : 1u) ||
+                    (kind >= UPDATE_SOURCE ? read_update_metadata(kind)
+                     : kind == SOURCE    ? read_source()
                      : kind == CATALOG ? read_catalog()
                                        : read_manifest()))
                     fail("无效的商城数据", ASTER_ECORRUPT);
@@ -981,6 +1159,26 @@ static void network_tick(void)
                 (uint32_t)r > files[file_at].bytes - file_received) {
                 fail("文件超出声明长度", ASTER_ECORRUPT);
                 return;
+            }
+            /* Bind the displayed version to the bytes being installed, even
+             * if the server returns a different prefix on the second GET. */
+            if (self_install && file_received < prefix_limit) {
+                unsigned limit = update_file.bytes < prefix_limit ? update_file.bytes : prefix_limit;
+                unsigned n = limit - file_received;
+                if (n > (unsigned)r)
+                    n = (unsigned)r;
+                memcpy(body + file_received, buffer + buffered, n);
+                if (file_received + n == limit) {
+                    store_sha256 prefix;
+                    char digest[65];
+                    sha_init(&prefix);
+                    sha_update(&prefix, body, limit);
+                    sha_hex(&prefix, digest);
+                    if (!equals(digest, prefix_digest)) {
+                        fail("商城版本校验失败", ASTER_ECORRUPT);
+                        return;
+                    }
+                }
             }
             sha_update(&checksum, buffer + buffered, (unsigned)r);
             buffered += (unsigned)r;
@@ -1348,6 +1546,7 @@ static void draw_settings(void)
     int sy, fy, fh, ky, step, ay, bottom;
     settings_metrics(&sy, &fy, &fh, &ky, &step, &ay, &bottom);
     label(12, ge.h < 300 ? 3 : 10, ge.h < 300 ? 16 : 20, ink, "服务器设置");
+    button(ge.w - 98, 2, 86, sy - 5, "商城更新", 1);
     int half = (ge.w - 30) / 2, sh = ge.h >= 400 ? 32 : ge.h < 300 ? 24 : 28;
     for (int i = 0; i < 2; i++) {
         int x = 12 + i * (half + 6);
@@ -1405,6 +1604,10 @@ static void tap_settings(int x, int y)
     int sy, fy, fh, ky, step, ay, bottom;
     settings_metrics(&sy, &fy, &fh, &ky, &step, &ay, &bottom);
     int half = (ge.w - 30) / 2, sh = ge.h >= 400 ? 32 : ge.h < 300 ? 24 : 28;
+    if (x >= (int)ge.w - 98 && x < (int)ge.w - 12 && y >= 2 && y < sy - 3) {
+        check_store_update();
+        return;
+    }
     if (y >= sy && y < sy + sh && x >= 12 && x < (int)ge.w - 12) {
         source_select(x >= 18 + half);
         return;
@@ -1490,7 +1693,7 @@ static void download_progress_text(char output[192], uint32_t progress)
 {
     char received[32], total[32];
     store_format_bytes(total_received, received);
-    store_format_bytes(entries[selected].bytes, total);
+    store_format_bytes(download_bytes(), total);
     aster_snprintf(output, 192, "%u%% · %s / %s", progress, received, total);
 }
 
@@ -1552,10 +1755,10 @@ static void draw_portrait(void)
         button(164, bottom, ge.w - 176, 36, install_action(e),
                can_install(e) && !cleanup[0] && !network_busy());
     } else if (view == DOWNLOAD) {
-        fit_label(18, 80, 18, ink, entries[selected].name, ge.w - 36);
+        fit_label(18, 80, 18, ink, download_name(), ge.w - 36);
         label(18, 118, 14, ink, "下载并校验中");
         unsigned progress =
-            entries[selected].bytes ? (uint64_t)total_received * 100 / entries[selected].bytes : 0;
+            download_bytes() ? (uint64_t)total_received * 100 / download_bytes() : 0;
         aster_ge_rect_r(&ge, 18, 154, ge.w - 36, 12, white, 6, 0);
         aster_ge_rect_r(&ge, 18, 154, (ge.w - 36) * progress / 100, 12, blue, 6, 0);
         download_progress_text(s, progress);
@@ -1654,10 +1857,10 @@ static void draw_compact(void)
         button(148, bottom, ge.w - 160, 36, install_action(e),
                can_install(e) && !cleanup[0] && !network_busy());
     } else if (view == DOWNLOAD) {
-        label(18, 62, 18, ink, entries[selected].name);
+        label(18, 62, 18, ink, download_name());
         label(18, 90, 12, ink, "下载并校验中");
         unsigned progress =
-            entries[selected].bytes ? (uint64_t)total_received * 100 / entries[selected].bytes : 0;
+            download_bytes() ? (uint64_t)total_received * 100 / download_bytes() : 0;
         aster_ge_rect_r(&ge, 18, 116, ge.w - 36, 10, white, 5, 0);
         aster_ge_rect_r(&ge, 18, 116, (ge.w - 36) * progress / 100, 10, blue, 5, 0);
         download_progress_text(s, progress);
@@ -1713,6 +1916,20 @@ static void tap_compact(int x, int y)
 static void draw(void)
 {
     aster_ge_clear(&ge, bg);
+    if (view == STORE_UPDATE) {
+        char line[96];
+        int top = ge.h / 4, gap = ge.h >= 400 ? 48 : 34;
+        label(14, 12, 20, ink, "商城更新");
+        aster_snprintf(line, sizeof(line), "当前版本  %s", local_version[0] ? local_version : "—");
+        label(14, top, 18, ink, line);
+        aster_snprintf(line, sizeof(line), "线上版本  %s", remote_version[0] ? remote_version : "—");
+        label(14, top + gap, 18, ink, line);
+        fit_label(14, top + gap * 2, 14, muted, status_line, ge.w - 28);
+        button(12, ge.h - 48, 74, 38, "返回", 1);
+        button(96, ge.h - 48, ge.w - 108, 38, update_available ? "立即更新" : "重新检查",
+               !wanted && !network_busy() && !cleanup[0]);
+        goto present;
+    }
     if (view == SETTINGS) {
         draw_settings();
         goto present;
@@ -1795,9 +2012,9 @@ static void draw(void)
         button(174, bottom, (int)ge.w - 192, 40, install_action(e),
                can_install(e) && !cleanup[0] && !network_busy());
     } else if (view == DOWNLOAD) {
-        label(18, ge.h >= 400 ? 100 : 92, 22, ink, entries[selected].name);
+        label(18, ge.h >= 400 ? 100 : 92, 22, ink, download_name());
         label(18, ge.h >= 400 ? 145 : 128, 16, ink, "下载并校验中");
-        uint32_t total = entries[selected].bytes;
+        uint32_t total = download_bytes();
         unsigned progress = total ? (uint64_t)total_received * 100 / total : 0;
         int bar_y = ge.h >= 400 ? 195 : 167;
         aster_ge_rect_r(&ge, 18, bar_y, ge.w - 36, 12, white, 6, 0);
@@ -1832,6 +2049,21 @@ static void tap(int x, int y)
         stop_network();
     if (wanted == ICON)
         wanted = NONE;
+    if (view == STORE_UPDATE) {
+        if (y >= (int)ge.h - 48 && y < (int)ge.h - 10) {
+            if (x >= 12 && x < 86) {
+                stop_network();
+                view = SETTINGS;
+            } else if (x >= 96 && x < (int)ge.w - 12 && !wanted && !network_busy() && !cleanup[0]) {
+                if (update_available)
+                    begin_install();
+                else
+                    check_store_update();
+            }
+        }
+        dirty = 1;
+        return;
+    }
     if (view == SETTINGS) {
         tap_settings(x, y);
         dirty = 1;
@@ -1944,7 +2176,16 @@ ASTER_APP_EXPORT int aster_app_init(void)
                 installed);
         wanted = NONE;
         aster_kv_delete("store.install.result", 20);
+        char version[24];
+        int n = aster_kv_get("store.self.version", 18, version, sizeof(version));
+        if (n > 0 && n <= (int)sizeof(version) && !version[n - 1]) {
+            if (!installed)
+                aster_snprintf(status_line, sizeof(status_line), "商城已更新至 %s", version);
+            else if (installed == ASTER_EPERM)
+                message("更新被拒，请核对固件和版本", installed);
+        }
     }
+    aster_kv_delete("store.self.version", 18);
     aster_app_set_framerate(60);
     aster_logf(ASTER_LOG_INFO, "STORE ready board=%s target=%s abi=%u", device.board, target,
                device.abi_version);
